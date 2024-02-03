@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/**
+@page references References
+
+@anchor RefDocs
+@table{2,{\raggedright}p{4.9in},{\raggedright}p{1.3in}}
+@trfirsthdg
+@thmultcol{1,|c|} Standards @thmultcolend @thmultcollast{1,c|}Number @thmultcollastend
+@trfirsthdgend
+@trhdg
+@thdg{1,|c|,Related Documents} @thdglast{1,c|,Number}
+@trhdgend
+@tr @td Wireless LAN Medium Access Control (MAC) and Physical Layer (PHY) Specifications @tdend @td IEEE 802.11-2012 @tdlastend @trend
+@tr @td Wireless LAN Medium Access Control (MAC) and Physical Layer (PHY) Specifications Amendment 6: Wireless Access in Vehicular Environments @tdend @td IEEE 802.11p-2010 @tdlastend @trend
+@tr @td IEEE Guide for Wireless Access in Vehicular Environments (WAVE) Architecture @tdend @td IEEE P1609.0 @tdlastend @trend
+@tr @td IEEE Standard for Wireless Access in Vehicular Environments - Security Services for Applications and Management Messages @tdend @td IEEE 1609.2 @tdlastend @trend
+@tr @td IEEE Standard for Wireless Access in Vehicular Environments (WAVE) - Networking Services @tdend @td IEEE 1609.3 @tdlastend @trend
+@tr @td IEEE Standard for Wireless Access in Vehicular Environments (WAVE) - Multi-channel Operation @tdend @td IEEE 1609.4 @tdlastend @trend
+@tr @td Logical Link Control @tdend @td IEEE 802.2 @tdlastend @trend
+@tr @td Dedicated Short Range Communication (DSRC) Minimum Performance Requirements @tdend @td SAE J2945 @tdlastend @trend
+@tr @td Intelligent Transport Systems (ITS); Decentralized Congestion Control Mechanisms for Intelligent Transport Systems operating in the 5 GHz range; Access layer part @tdend @td ETSI TS 102 687 @tdlastend @trend
+@tableend
+
+*/
+

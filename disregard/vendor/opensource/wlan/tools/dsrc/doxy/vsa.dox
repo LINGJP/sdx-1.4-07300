@@ -1,0 +1,58 @@
+/*
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/**
+@page vsa Vendor-Specific Action Frames
+
+Vendor-specific action frames can be transmitted if the interface is configured in Raw mode.
+Vendor-specific action frames are transmitted the same way that data frames are transmitted.
+A packet with an 802.11 header is constructed, and the frame control field of the 802.11
+header must be set to indicate that the packet is a management frame and an action frame.
+This packet is sent to the host driver via the raw socket. The TX control header can be
+used to specify parameters such as MCS and transmit power.
+
+To send a vendor-specific action frame with the sample application, run
+
+<tt>dsrc_tx -v</tt>
+
+Vendor-specific action frames are received via netlink sockets and not via the raw socket
+used by data packets. To receive vendor-specific action frames, the application must open
+a generic netlink socket and register to receive vendor-specific action frames from the
+appropriate interface by issuing a NL80211_CMD_REGISTER_FRAME message. The
+NL80211_ATTR_FRAME_MATCH attribute is set to 127 to indicate vendor-specific actions.
+After the netlink socket is registered to receive vendor-specific action frames,
+these frames will be delivered to the application via the netlink socket
+in a NL80211_CMD_FRAME message. In this message, the entire frame, including the 802.11
+header, is in the NL80211_ATTR_FRAME attribute. The NL80211_ATTR_WIPHY_FREQ contains the
+frequency on which the frame was received. The NL80211_ATTR_RX_SIGNAL_DBM attribute contains
+the received signal strength in mBm units.
+
+To receive vendor-specific action frames with the sample application, run
+
+<tt>dsrc_config -c rx_vsa</tt>
+*/

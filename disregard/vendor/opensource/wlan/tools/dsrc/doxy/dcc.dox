@@ -1,0 +1,514 @@
+/*
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/**
+@page dcc Decentralized Congestion Control
+
+Decentralized congestion control (DCC) is a mandatory component of ITS-G5
+stations operating in ITS-G5A and ITS-G5B frequency bands to maintain network
+stability, throughput efficiency, and fair resource allocation to ITS-G5
+stations.
+
+DCC reduces congestion on busy channels. Each station monitors the state of the
+channel to determine the percentage of time that the channel is
+busy. This measurement is called the channel load.
+The DCC parameters are stored in the network design limits (NDL) database.
+The NDL is split into a number of states where each state corresponds to a
+range of channel loads. Each state contains the limits for the
+transmit parameters that can be used while in that state.
+When the channel becomes more congested according to the channel load, the
+station will help to reduce the congestion by moving into a more restrictive state
+associated with the higher channel load.
+The least restrictive state is referred to as the "Relaxed state," and the most
+restrictive state is referred to as the "Restrictive state." The states inbetween are referred to as "active states". Moving to more restrictive states
+as the channel load increases reduces the congestion by modifying various
+transmit parameters, such as by transmitting with a higher MCS, by reducing the
+transmit power, and by limiting the transmit rate. The DCC algorithm is
+described in detail in "ETSI TS 102 687".
+
+To enable DCC, include the <tt>-d</tt> parameter when executing
+<tt>dsrc_config</tt>. For example, to configure DSRC on channel 5860 with
+DCC enabled, execute the following command:
+
+<tt>dsrc_config -c set_config -o channel_freq0=5860 -d</tt>
+
+If the <tt>-d</tt> parameter is not present, DCC is disabled.
+
+The configurable parameters for DCC
+referred to as the network design limits (NDL) are read by the
+<tt>dsrc_config</tt> sample app from the file <tt>dcc.dat</tt> in the same
+folder as <tt>dsrc_config</tt> and sent to the host driver.
+If <tt>dsrc_config</tt> is executed with the
+<tt>-d</tt> option but the file <tt>dcc.dat</tt> does not exist,
+<tt>dsrc_config</tt> will fail.
+
+The NDL parameters in dcc.dat are as follows:
+
+<b>DCC_Channels</b>
+
+Currently, DCC is supported on a maximum of two channels. We can specify the
+channels using the center frequency.
+
+For single channel: <tt>DCC_Channels=5860</tt>
+
+For two channels: <tt>DCC_Channels=5860,5890</tt>
+
+<b>DCC_ControlLoopEnable</b>
+
+This parameter is used to enable the DCC control loop state machine for each
+channel. To enable the state machine on two channels, the string is set this way:
+
+<tt>DCC_ControlLoopEnable=1,1</tt>
+
+It is possible for the end user to disable the state machine per channel and only have
+the DCC statistics reporting enabled to understand the channel properties, or to
+have both the DCC state machine and DCC statistics reporting disabled as well.
+
+<b>DCC_StatsEnable</b>
+
+This parameters helps to enable DCC statistic reporting on each channel.
+If this is enabled, these are the statistics that are sent to the user.
+1. Average TX power of frames of each access category
+2. Average data rate of frames of each access category
+3. Channel load value
+
+<b>DCC_StatsInterval</b>
+
+This configures the interval of DCC statistics reporting. This value is in
+multiples of 10 ms. To configure the interval to 5 seconds for 2 channels, set
+
+<tt>DCC_StatsInterval=500,500</tt>
+
+<b>DCC_MinDccSampling</b>
+
+This gives the information to the firmware about how often the channel load value needs
+to be checked. Every minimum DCC sampling interval, the firmware finds the channel
+load value for the last minimum DCC sampling time and records that. This value
+is specified in multiples of 10 ms.
+For example,
+
+<tt>DCC_MinDccSampling=100</tt>
+
+to set the value to 1 second.
+
+<b>DCC_MeasurementInterval</b>
+
+This interval determines how often the firmware consolidates the statistics that
+are sent every stats interval to the user. Preferably, this value is less than or
+equal to the stats interval value, and the stats interval value can be an integer
+multiple of the measurement interval.
+This value is specified in multiples of 10 ms.
+
+<b>NDL_minTxPower</b>
+
+This number specifies the maximum transmit power allowed in the Restrictive state.
+This number is specified as
+
+physicalValue = referenceValue + number * stepSize
+
+where the reference value is -20 dBm and the stepSize is 0.5 dBm.
+For example, to specify 10 dBm (physicalValue) as the <tt>NDL_minTxPower</tt>,
+set the value to
+
+number = (physicalValue - referenceValue) / stepSize = (10 - -20)/0.5 = 30/0.5 = 60
+
+<tt>NDL_minTxPower=60</tt>
+
+When in the Restrictive state, any packets sent with a value higher than
+<tt>NDL_minTxPower</tt> from the application will go out with
+<tt>NDL_minTxPower</tt>. Any packets sent with a value less than
+<tt>NDL_minTxPower</tt> from the application will go out with same power as
+specified by the application.
+
+<b>NDL_maxTxPower</b>
+
+This number specifies the maximum transmit power allowed in the Relaxed state.
+This number is specified the same way as <tt>NDL_minTxPower</tt>.
+When in the Relaxed state, any packets sent with a value higher than
+<tt>NDL_maxTxPower</tt> from the application
+will go out with <tt>NDL_maxTxPower</tt>. Any packets sent with a value less than
+<tt>NDL_maxTxPower</tt> from the application will go out with the same power as specified by
+the application.
+
+<b>NDL_defTxPower-AC_BK, NDL_defTxPower-AC_BE, NDL_defTxPower-AC_VO,
+NDL_defTxPower-AC_VI</b>
+
+<tt>NDL_defTxPower</tt> parameters are not used in the current implementation.
+
+<b>NDL_maxPacketDuration-AC_BK</b>
+
+This provides the maximum packet duration or air time allowed for packets sent
+with the access category background (BK). This value is specified in multiples of
+8 microseconds.
+For example, to allow a maximum packet air time of 10 ms, set
+
+<tt>NDL_maxPacketDuration-AC_BK=1250</tt>
+
+Any packets of background priority sent with a length that takes air time higher
+than <tt>NDL_maxPacketDuration-AC_BK</tt> will be dropped by the hardware.
+
+<b>NDL_maxPacketDuration-AC_BE</b>
+
+This provides the maximum packet duration or air time allowed for packets sent
+with the access category best-effort (BE). This value is specified in multiples of
+8 microseconds.
+For example, to allow a maximum packet air time of 10 ms set
+
+<tt>NDL_maxPacketDuration-AC_BK=1250</tt>
+
+Any packets of best-effort priority sent with a length that takes air time
+higher than <tt>NDL_maxPacketDuration-AC_BE</tt> will be dropped by the hardware.
+
+<b>NDL_maxPacketDuration-AC_VO</b>
+
+This provides the maximum packet duration or air time allowed for packets sent
+with the access category voice (VO). This value is specified in multiples of
+8 microseconds.
+For example, to allow a maximum packet air time of 10 ms set
+
+<tt>NDL_maxPacketDuration-AC_BE=1250</tt>
+
+Any packets of voice priority sent with a length that takes air time higher than
+<tt>NDL_maxPacketDuration-AC_VO</tt> will be dropped by the hardware.
+
+<b>NDL_maxPacketDuration-AC_VI</b>
+
+This provides the maximum packet duration or air time allowed for packets sent
+with the access category video (VI). This value is specified in multiples of
+8 microseconds.
+For example, to allow a maximum packet air time of 10 ms set
+
+<tt>NDL_maxPacketDuration-AC_VI=1250</tt>
+
+Any packets of video priority sent with a length that takes air time higher than
+<tt>NDL_maxPacketDuration-AC_VI</tt> will be dropped by the hardware.
+
+<b>NDL_minPacketInterval</b>
+
+This value is the minimum interval between two subsequent packets when the DCC
+access control loop state is in the Relaxed state. This value is specified in
+multiples of 10 ms.
+The next packets will not be sent until the <tt>NDL_minPacketInterval</tt> time
+expires after sending the previous packet.
+
+<b>NDL_maxPacketInterval</b>
+
+This value is the minimum interval between subsequent packets when the DCC access
+control loop state is in the Restrictive state. This value is specified in
+multiples of 10 ms.
+The next packets will not be sent until the <tt>NDL_maxPacketInterval</tt> time
+expires after sending the previous packet.
+
+<b>NDL_defPacketInterval-AC_BK, NDL_defPacketInterval-AC_BE,
+NDL_defPacketInterval-AC_VO, NDL_defPacketInterval-AC_VI</b>
+
+These parameters are not used in the current implementation
+
+<b>NDL_minDatarate</b>
+
+This is the minimum data rate allowed in the Relaxed state. This value is
+specified in MCS index 0 to 7, where MCS 0 corresponds to the lowest data rate
+(BPSK+1/2R) and MCS7 corresponds to the highest data rate (64QAM+3/4R).
+For example, for MCS2:
+
+<tt>NDL_minDatarate=2</tt>
+
+Any packets that are sent with an MCS index lower than <tt>NDL_minDatarate</tt>
+will go out with a <tt>NDL_minDatarate</tt> data rate. Any packets that are sent with
+an MCS index higher than NDL_minDatarate by the application will be sent with the same
+data rate as determined by the application.
+
+<b>NDL_maxDatarate</b>
+
+This is the minimum data rate allowed in the Restrictive state. This value is
+specified in MCS index 0 to 7, where MCS 0 corresponds to the lowest data rate
+(BPSK+1/2R) and MCS7 corresponds to the highest data rate (64QAM+3/4R).
+For example, for MCS6:
+
+<tt>NDL_maxDatarate=6</tt>
+
+Any packets that are sent with an MCS index lower than <tt>NDL_maxDatarate</tt>
+will go out with NDL_maxDatarate data rate. Any packets that are sent with an MCS index
+higher than <tt>NDL_maxDatarate</tt> by the application will be sent with the same
+data rate as determined by the application.
+
+<b>NDL_defDatarate-AC_BK, NDL_defDatarate-AC_BE,
+NDL_defDatarate-AC_VO, NDL_defDatarate-AC_VI</b>
+
+These parameters are not used in the current implementation
+
+<b>NDL_minCarrierSense, NDL_maxCarrierSense,
+NDL_defCarrierSense, NDL_defDccSensitivity</b>
+
+These parameters are not used in the current implementation and the hardware is set to a
+default receive sensitivity for the entire duration of DCC operation.
+
+<b>NDL_maxCsRange, NDL_refPathLoss, NDL_minSNR</b>
+
+These parameters are not supported in the current implementation
+
+<b>NDL_snrBackoff-MCS0, NDL_snrBackoff-MCS1, NDL_snrBackoff-MCS2,
+NDL_snrBackoff-MCS3, NDL_snrBackoff-MCS4, NDL_snrBackoff-MCS5,
+NDL_snrBackoff-MCS6, NDL_snrBackoff-MCS7</b>
+
+These values are returned as is in the DCC statistics event sent to the user.
+
+<b>NDL_tmPacketArrivalRate-AC_BK, NDL_tmPacketArrivalRate-AC_BE,
+NDL_tmPacketArrivalRate-AC_VO, NDL_tmPacketArrivalRate-AC_VI,
+NDL_tmPacketAvgDuration-AC_BK, NDL_tmPacketAvgDuration-AC_BE,
+NDL_tmPacketAvgDuration-AC_VO, NDL_tmPacketAvgDuration-AC_VI,
+NDL_tmSignalAvgPower-AC_BK, NDL_tmSignalAvgPower-AC_BE,
+NDL_tmSignalAvgPower-AC_VO, NDL_tmSignalAvgPower-AC_VI,
+NDL_maxChannelUse, NDL_tmChannelUse-AC_BK,
+NDL_tmChannelUse-AC_BE, NDL_tmChannelUse-AC_VO,
+NDL_tmChannelUse-AC_VI</b>
+
+All these parameters are not supported in the current implementation.
+
+<b>NDL_minChannelLoad</b>
+
+This is the channel load threshold for the Relaxed state. If the channel load is
+lower than this, the DCC access control loop will stay in the Relaxed state. If the
+channel load is equal or above this, the access control loop will go to one of the other
+active states or the Restrictive state, depending on the magnitude of the channel load.
+
+<b>NDL_maxChannelLoad</b>
+
+This is the channel load threshold for the Restrictive state. If the channel load
+is equal or above this, the DCC control loop state will transition to the Restrictive
+state.
+
+<b>NDL_refQueueStatus-AC_BK</b>
+
+This value specifies whether the transmit queue of access category Background
+is in the Open or Closed state. If the value is 1, the queue is open, and if the value is 0,
+the queue is closed.
+Any packets sent by the application with access category Background will be dropped
+by the hardware if the queue for that access category is in the Closed state.
+
+<b>NDL_refQueueStatus-AC_BE</b>
+
+This value specifies whether the transmit queue of access category BE
+is in the Open or Closed state. If the value is 1, the queue is open, and if the value is 0,
+the queue is closed.
+Any packets sent by the application with access category BE will be
+dropped by the hardware if the queue for that access category is in the Closed state.
+
+<b>NDL_refQueueStatus-AC_VI</b>
+
+This value specifies whether the transmit queue of access category Video is in the
+Open or Closed state. If the value is 1, the queue is open, and if the value is 0, the queue is
+closed. Any packets sent by the application with access category Video will be
+dropped by the hardware if the queue for that access category is in the Closed state.
+
+<b>NDL_refQueueStatus-AC_VO</b>
+
+This value specifies whether the transmit queue of access category Voice is in the
+Open or Closed state. If the value is 1, the queue is open, and if the value is 0, the queue is
+closed. Any packets sent by the application with access category Voice will be
+dropped by the hardware if the queue for that access category is in the Closed state.
+
+<b>NDL_queueLen-AC_BK, NDL_queueLen-AC_BE, NDL_queueLen-AC_VO,
+NDL_queueLen-AC_VI</b>
+
+These values are not supported in the current implementation
+
+<b>NDL_timeUp</b>
+
+This value, usually an integer multiple of the minimum DCC sampling interval,
+specifies how long the state machine has to wait before going to higher, more
+restrictive states.
+
+<tt>DCC_minDCCSampling</tt> <= <tt>NDL_timeUp</tt> <= <tt>NDL_timeDown</tt>
+
+<b>NDL_timeDown</b>
+
+This value specifies how long the state machine must wait before going to
+lower, more relaxed states. This value is usually an integer multiple of the
+minimum DCC sampling and is equal to or higher than <tt>NDL_timeUp</tt>.
+
+<b>NDL_numActiveStates</b>
+
+This value specifies the number of active states supported by the DCC access
+control loop state machine. The current implementation supports a maximum of four active
+states.
+
+<b>NDL_asChanLoad-ActiveState_1, NDL_asChanLoad-ActiveState_2,
+NDL_asChanLoad-ActiveState_3, NDL_asChanLoad-ActiveState_4</b>
+
+This value specifies the channel load threshold for Active State 1.
+The last number in the parameter string indicates the state number.
+
+<b>NDL_asDcc-AC_BK-ActiveState_1, NDL_asDcc-AC_BE-ActiveState_1,
+NDL_asDcc-AC_VO-ActiveState_1, NDL_asDcc-AC_VI-ActiveState_1,
+NDL_asDcc-AC_BK-ActiveState_2, NDL_asDcc-AC_BE-ActiveState_2,
+NDL_asDcc-AC_VO-ActiveState_2, NDL_asDcc-AC_VI-ActiveState_2,
+NDL_asDcc-AC_BK-ActiveState_3, NDL_asDcc-AC_BE-ActiveState_3,
+NDL_asDcc-AC_VO-ActiveState_3, NDL_asDcc-AC_VI-ActiveState_3,
+NDL_asDcc-AC_BK-ActiveState_4, NDL_asDcc-AC_BE-ActiveState_4,
+NDL_asDcc-AC_VO-ActiveState_4, NDL_asDcc-AC_VI-ActiveState_4</b>
+
+<tt>NDL_asDcc</tt> is a bitmap that is specified for each access category and
+state. This bitmap selects the DCC mechanisms that will get a new threshold in
+the given state.
+
+This is the meaning of each bit in the bitmap:
+
+| Value | DCC Mechanism |
+|:------|---------------|
+| 1     | TPC           |
+| 2     | TRC           |
+| 4     | TDC           |
+| 8     | DSC           |
+| 16    | TAC           |
+| 32    | reserved      |
+| 0     | None          |
+| 63    | All           |
+
+
+For example:
+
+<tt>NDL_asDcc-AC_VI-ActiveState_1=7</tt>
+
+means TPC, TRC, and TDC will get
+new thresholds in Active State 1.
+
+<b>NDL_asTxPower-AC_BK-ActiveState_1,
+NDL_asTxPower-AC_BE-ActiveState_1,
+NDL_asTxPower-AC_VO-ActiveState_1,
+NDL_asTxPower-AC_VI-ActiveState_1,
+NDL_asTxPower-AC_BK-ActiveState_2,
+NDL_asTxPower-AC_BE-ActiveState_2,
+NDL_asTxPower-AC_VO-ActiveState_2,
+NDL_asTxPower-AC_VI-ActiveState_2,
+NDL_asTxPower-AC_BK-ActiveState_3,
+NDL_asTxPower-AC_BE-ActiveState_3,
+NDL_asTxPower-AC_VO-ActiveState_3,
+NDL_asTxPower-AC_VI-ActiveState_3,
+NDL_asTxPower-AC_BK-ActiveState_4,
+NDL_asTxPower-AC_BE-ActiveState_4,
+NDL_asTxPower-AC_VO-ActiveState_4,
+NDL_asTxPower-AC_VI-ActiveState_4</b>
+
+This parameter specifies a new maximum power threshold for the given state and
+access category. The number specified for this follows the same formula as
+<tt>NDL_minTxPower</tt>, specified in section 5.7.
+If the value is set to 'ref', it will use the thresholds from the previous
+state.
+
+For example:
+
+<tt>NDL_asTxPower-AC_VI-ActiveState_1=60,ref</tt>
+
+means, in Active State 1,
+the new maximum transmit power for the first channel is 10 dBm and the new maximum
+transmit power for the second channel is the same as the maximum transmit power for the
+second channel in the previous state for any packets with the video access
+category.
+
+<b>NDL_asPacketInterval-AC_BK-ActiveState_1,
+NDL_asPacketInterval-AC_BE-ActiveState_1,
+NDL_asPacketInterval-AC_VO-ActiveState_1,
+NDL_asPacketInterval-AC_VI-ActiveState_1,
+NDL_asPacketInterval-AC_BK-ActiveState_2,
+NDL_asPacketInterval-AC_BE-ActiveState_2,
+NDL_asPacketInterval-AC_VO-ActiveState_2,
+NDL_asPacketInterval-AC_VI-ActiveState_2,
+NDL_asPacketInterval-AC_BK-ActiveState_3,
+NDL_asPacketInterval-AC_BE-ActiveState_3,
+NDL_asPacketInterval-AC_VO-ActiveState_3,
+NDL_asPacketInterval-AC_VI-ActiveState_3,
+NDL_asPacketInterval-AC_BK-ActiveState_4,
+NDL_asPacketInterval-AC_BE-ActiveState_4,
+NDL_asPacketInterval-AC_VO-ActiveState_4,
+NDL_asPacketInterval-AC_VI-ActiveState_4</b>
+
+This parameter specifies the new minimum packet interval threshold for the given
+state and access category. This value is specified in multiples of 10 ms.
+If the value is set to 'ref', it will use the thresholds from the previous
+state.
+
+For example:
+
+<tt>NDL_asPacketInterval-AC_VO-ActiveState_3=100,ref</tt>
+
+means, in Active
+State 3, the new minimum packet interval threshold for the first channel is 1
+second and the new minimum packet interval for the second channel is the same as
+in the previous state for any packets with the voice access category.
+
+<b>NDL_asDatarate-AC_BK-ActiveState_1,
+NDL_asDatarate-AC_BE-ActiveState_1,
+NDL_asDatarate-AC_VO-ActiveState_1,
+NDL_asDatarate-AC_VI-ActiveState_1,
+NDL_asDatarate-AC_BK-ActiveState_2,
+NDL_asDatarate-AC_BE-ActiveState_2,
+NDL_asDatarate-AC_VO-ActiveState_2,
+NDL_asDatarate-AC_VI-ActiveState_2,
+NDL_asDatarate-AC_BK-ActiveState_3,
+NDL_asDatarate-AC_BE-ActiveState_3,
+NDL_asDatarate-AC_VO-ActiveState_3,
+NDL_asDatarate-AC_VI-ActiveState_3,
+NDL_asDatarate-AC_BK-ActiveState_4,
+NDL_asDatarate-AC_BE-ActiveState_4,
+NDL_asDatarate-AC_VO-ActiveState_4,
+NDL_asDatarate-AC_VI-ActiveState_4</b>
+
+This parameter specifies the minimum data rate for the given state and access
+category. This value is specified as MCS index 0 to 7.
+If the value is set to 'ref', it will use the thresholds from the previous
+state.
+
+For example:
+
+<tt>NDL_asDatarate-AC_VO-ActiveState_2=ref, 6</tt>
+
+means, in Active State 2,
+the minimum data rate for the first channel is the same as in the previous state,
+and the minimum data rate for the second channel is MCS6.
+
+<b>NDL_asCarrierSense-AC_BK-ActiveState_1,
+NDL_asCarrierSense-AC_BE-ActiveState_1,
+NDL_asCarrierSense-AC_VO-ActiveState_1,
+NDL_asCarrierSense-AC_VI-ActiveState_1,
+NDL_asCarrierSense-AC_BK-ActiveState_2,
+NDL_asCarrierSense-AC_BE-ActiveState_2,
+NDL_asCarrierSense-AC_VO-ActiveState_2,
+NDL_asCarrierSense-AC_VI-ActiveState_2,
+NDL_asCarrierSense-AC_BK-ActiveState_3,
+NDL_asCarrierSense-AC_BE-ActiveState_3,
+NDL_asCarrierSense-AC_VO-ActiveState_3,
+NDL_asCarrierSense-AC_VI-ActiveState_3,
+NDL_asCarrierSense-AC_BK-ActiveState_4,
+NDL_asCarrierSense-AC_BE-ActiveState_4,
+NDL_asCarrierSense-AC_VO-ActiveState_4,
+NDL_asCarrierSense-AC_VI-ActiveState_4</b>
+
+These parameters are not used in the current implementation.
+
+*/

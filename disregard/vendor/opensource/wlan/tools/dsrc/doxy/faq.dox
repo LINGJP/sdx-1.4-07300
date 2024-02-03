@@ -1,0 +1,182 @@
+/*
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/** @page faq Frequently Asked Questions
+
+<b> Q: </b> How do we use the sample dsrc_config app for multichannel operation?
+
+<b> A: </b> Here is a sample command with options.
+
+@verbatim
+  ./dsrc_config -c set_config -o num_channels=2,channel_freq0=5860,channel_bandwidth0=10,
+          tx_power0=17,duration0=500,guard0=100,channel_freq1=5900,channel_bandwidth1=10,
+          tx_power1=17,duration1=500,guard1=100
+@endverbatim
+
+@note Do not use spaces in the list of options after -o
+
+This command starts alternate channel switching between the channels specified in channel_freq0 and channel_freq1 (5860 MHz and 5900 MHz, respectively, in this example).
+The dwell time in msec on each channel is specified in duration0 and duration1 (500 msec in this example).
+The guard0 and guard1 times in msec specify the time to wait before transmitting data after a channel change (100 msec in this example).
+
+<b> Q: </b> How do we test three devices using sample apps?
+
+<b> A: </b> DUT #1  Tx  dual channel with 1pps. The dsrc_tx app will run twice (once in the background) to transmit on each of the two channels.
+
+@verbatim
+  ./dsrc_set_chan -c num_channels=2,channel_freq0=5870,channel_bandwidth0=10,
+                                    channel_freq1=5900,channel_bandwidth1=10
+  ./dsrc_tx -c 5870 -p 1 -m 0 -a 1 -x 5000& ./dsrc_tx -c 5900 -p 1 -m 0 -a 1 -x 5000
+@endverbatim
+
+DUT #2 Rx single channel without 1pps
+@verbatim
+  ./dsrc_set_chan -c 5870
+  ./dsrc_rx
+@endverbatim
+
+DUT #3 Rx single channel without 1pps
+@verbatim
+  ./dsrc_set_chan -c 5900
+  ./dsrc_rx
+@endverbatim
+
+<b> Q: </b> Is freq0 the Control Channel and freq1 the Service Channel in the app command line options?
+
+<b> A: </b> Yes. The channel specified in channel_freq0 will be scheduled for the time slot aligned with the 1pps interrupt.
+This behavior corresponds to that of the Control Channel, as explained in the IEEE 1609.4.
+
+<b> Q: </b> What are the default duration and guard times the in dsrc_set_chan sample app?
+
+<b> A: </b> Duration = 50 msec, Guard = 4 msec
+@newpage
+<b> Q: </b> Are guard0 and guard1 part of duration0 and duration1?<br>
+For example, if duration0/1=500, guard0/1=100:
+- Tx/Rx on freq0: 400 msec
+- Guard time before switching to freq1: 100 msec
+- Tx/Rx on freq1: 400 msec
+- Guard time before switching to freq0: 100 msec
+
+<b> A: </b> Yes. If you set duration0/1=500 and guard0/1=100, the time on each channel will be 400 ms plus 100 ms guard.
+
+<b> Q: </b> How do I do continuous Tx using the dsrc_tx sample app?
+
+<b> A: </b> Use the "-x 0" option.
+
+<b> Q: </b> Is sending Timing Advertisements supported?
+
+<b> A: </b> Yes, Timing Advertisement broadcasts are supported.
+This requires the application to send the UTC time to the modem using the following API:
+@verbatim
+  int dsrc_ocb_set_utc_time(char *interface,
+                        uint8_t time_value[DSRC_OCB_UTC_TIME_LEN],
+                        uint8_t time_error[DSRC_OCB_UTC_TIME_ERROR_LEN]);
+@endverbatim
+
+A PPS signal is needed to synchronize the time.
+
+Here is the procedure:<br>
+You need two devices, one for Tx and one for Rx.
+
+Tx DUT<br>
+Connect 1pps
+
+@verbatim
+  ./dsrc_set_chan -c 5870
+  ./dsrc_config -c set_utc
+  ./dsrc_config -c start_ta -r 3 -o channel_freq0=5870
+@endverbatim
+
+The -r value is how many TAs will be sent in a 5 sec period (3 in 5 sec in this case).<br>
+Let the TA run for a while.<br>
+Stop the TA.
+
+@verbatim
+  ./dsrc_config -c stop_ta
+@endverbatim
+
+Rx DUT
+
+@verbatim
+  ./dsrc_set_chan -c 5870
+@endverbatim
+
+<b> Q: </b> Does Timing Advertisement work in dual channel mode (both CCH and SCH)?
+
+<b> A: </b> No. TA only works for a single channel.
+If channels 5900 and 5860 are configured for switching:
+
+@verbatim
+  ./dsrc_config -c start_ta -o channel_freq0=5900 -r 3
+         //After this request, TA will be sent on 5900
+  ./dsrc_config -c start_ta -o channel_freq0=5860 -r 3
+         //After this request, TA will be stopped on 5900 and sent on 5860.
+@endverbatim
+
+<b> Q: </b> Does "dsrc_config -c set_utc" get the UTC time from the kernel, and is a value needed for the command?
+
+<b> A: </b> Yes, it sends system time in UTC format to the host driver. No value is needed.
+
+<b> Q: </b> How do I view the Tx output on a spectrum analyzer?
+
+<b> A: </b> Run the Tx sample app in continuous mode with a high payload:
+
+@verbatim
+  ./dsrc_tx -c 5870 -p 1 -m 0 -a 1 -x 0 -l 1400
+@endverbatim
+
+<b> Q: </b> Are Immediate SCH access and Extended SCH access supported?
+
+<b> A: </b> Yes. If a single channel is configured, it switches to the specified channel immediately.<br>
+Or, if already using that channel, it keeps using that channel.
+
+<b> Q: </b> What happens in the following scenario?
+   - Device A is running in 2 channel mode; 5860=CCH, 5900=SCH
+   - Device B is running in 1 channel mode but switches to 2 channel mode
+
+In this case, what might happen?
+   - When device A uses CCH, device B uses SCH
+   - When device A uses SSH, device B uses CCH
+
+<b> A: </b> When device B switches to dual channel mode, it will pause scheduling until the nearest time for CCH to be
+scheduled so that it will be synchronized to the next PPS. The prerequisite is that both devices have a reliable PPS.
+
+<b> Q: </b> What is the max WSMP packet size that QCA6584.LE.1.0.3 supports?
+
+<b> A: </b> The max size of the Ethernet packet in the host driver is 1500 bytes. The max size of a WSMP packet is 1458 bytes, which is 1500 bytes minus the Ethernet header and the TX control header.
+Even though 802.11 allows packets larger than 2000 bytes, the host driver and firmware do not support that because they were written to be compatible with 802.3, which has a max size of 1500.
+*/
+
+
+
+
+
+
+
+
+

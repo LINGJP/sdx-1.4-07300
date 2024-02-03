@@ -1,0 +1,458 @@
+/*
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/**
+@page sample_apps Sample Applications
+
+The sample_apps folder, which is part of the software release package folder, contains programs written in the C language. These are a few sample applications and re-usable utilities to develop the DSRC driver/application. This is to exemplify the support in the WLAN host driver.
+
+There are four sample applications to demonstrate the configuration and sending
+and receiving packets on 802.11p channels. See the [Building] section for instructions on how to
+build the applications from sources.
+
+Simple Rx and Tx applications:
+It encapsulates a packet with a 802.3 custom header before transmitting.
+The receiver then de-encapsulates this packet and verifies the contents.
+Note that sendmsg() and recvmsg() are used for sending/receiving packets.
+
+@section building Building
+
+The code in ths folder has been verified with <tt>gcc</tt> cross-compiled to different
+Linux variants. Identify the Linux run-time needed for your target device. Make
+sure the compiler is in your path.
+
+Use <tt>make</tt> to compile the applications.
+
+- make will look at the CROSS_COMPILE environment variable to determine which
+compiler to use. If CROSS_COMPILE is already set:
+@verbatim
+    make all
+@endverbatim
+
+- To cross compile for a specific target:
+@verbatim
+    CROSS_COMPILE=arm-oe-linux-gnueabi- make all
+@endverbatim
+
+- or
+@verbatim
+    CROSS_COMPILE=arm-linux-gnueabihf- make all
+@endverbatim
+
+- To cross compile using native <tt>gcc</tt>:
+@verbatim
+    make all
+@endverbatim
+
+- Clean the corresponding intermediate and final objects:
+@verbatim
+    [CROSS_COMPILE=<variant>] make clean
+@endverbatim
+
+DSRC additional control commands are implemented using nl80211 sockets. These
+require the nl80211 library to be installed in the host and target. In order to
+build the <tt>dsrc_config</tt> application, add a configuration variable according to the library
+version that is available in the target:
+
+- For libnl-2:
+@verbatim
+    HAVE_LIBNL=1 CROSS_COMPILE=<variant> make dsrc_config
+@endverbatim
+
+- For libnl-3:
+@verbatim
+    HAVE_LIBNL3=1 CROSS_COMPILE=<variant> make dsrc_config
+@endverbatim
+
+- Follow these commands to install libnl-3 on the build machine
+@verbatim
+    sudo apt-get install bison flex
+    wget http://www.infradead.org/~tgr/libnl/files/libnl-3.2.25.tar.gz
+    tar -xzf libnl-3.2.25.tar.gz
+    cd libnl-3.2.25
+    ./configure --host=arm-linux-gnueabihf --prefix=/usr/arm-linux-gnueabihf
+    make
+    sudo make install
+    cd include/
+    sudo make install
+@endverbatim
+
+@section using_applications Using Applications
+
+First configure the channels for OCB communications using the <tt>dsrc_set_chan</tt> application.
+Channels are expressed with center frequency and optionally with bandwidth.
+Default channel bandwidth, if not provided, is the maximum bandwidth allowed by
+that channel (10 MHz for most channels in the 5.9 GHz band).
+
+<b>Example</b>
+5860 MHz corresponds to Channel 172.
+
+Once channels have been set up, use the <tt>dsrc_tx</tt> application to transmit and the <tt>dsrc_rx</tt>
+application to receive.
+
+@subsection configure_channel Configure Channel
+
+Usage:
+@verbatim
+dsrc_set_chan [-i <interface>] [-c <channel frequency>] [-c <channel options>]
+
+Defaults: interface wlanocb0, channel 5860
+-c <channel options> :
+    num_channels={1|2} :
+       when 1 channel_freq0 and channel_bandwidth0 are needed.
+       when 2 same as 1, additionally freq1 and bandwith1 are needed.
+    channel_freq0=<center frequency in MHz>
+    channel_bandwidth0=<bandwidth in MHz>
+    tx_power0=<an integer value, max transmit power in 0.5dbm step size. For example
+	  value 6 results in 3dbm>
+    channel_freq1=<center frequency in MHz>
+    channel_bandwidth1=<bandwidth in MHz>
+    tx_power1=<an integer value, max transmit power on channel_freq1, in 0.5dmb step size>
+@endverbatim
+
+<b>Note:</b> <tt>num_channels=2</tt> means the alternate channel switching. Channel switching
+is only supported on devices that are capable of feeding the Pulse Per Second
+signal to the WLAN processor. Check with your platform configuration whether
+this support exists.
+
+<b>Example</b>
+- To set a channel 5900 on wlanocb0 with 10 MHz (default) bandwidth,
+@verbatim
+dsrc_set_chan -c 5900
+@endverbatim
+
+- To set a channel 5875 on wlanocb0, with 20 MHz bandwidth and a maximu Tx power of 17 dbm,
+@verbatim
+dsrc_set_chan -c num_channels=1,channel_freq0=5875,channel_bandwidth0=20,tx_power0=34
+@endverbatim
+
+- To set two channels alternating,
+@verbatim
+dsrc_set_chan -c num_channels=2,channel_freq0=5860,channel_bandwidth0=10,tx_power0=34,
+channel_freq1=5875,channel_bandwidth1=20,tx_power1=44
+@endverbatim
+
+@subsection transmit_app Transmit Application
+
+Usage:
+@verbatim
+  Usage: dsrc_tx [-i <interface>] [-c <channel freq>] [-d]
+      [-h] [-n] [-p <power>] [-m <MCS index>]
+      [-r <retry limit>] [-t <TSF expire high>]
+      [-s <TSF expire low>] [-a <chain mask>]
+      [-o <traffic ID>] [-x <repeat interval msec>]
+      [-p <tx power>] [-k <number of packets>]
+      [-l <payload length>] -f <input file>
+  Defaults: interface wlanocb0, channel 5860, no dump
+  -h : this message
+  -d : dump TX packet
+  -n : no TX control header
+  -m [MCS index] : (data rates @ 20 MHz BW
+      0: 6 MBPS
+      1: 9 MBPS
+      2: 12 MBPS
+      3: 18 MBPS
+      4: 24 MBPS
+      5: 36 MBPS
+      6: 48 MBPS
+      7: 54 MBPS
+  -a : chain mask (antenna).
+      eg : for chain 0 use "-a 1"
+           for chain 1 "-a 2"
+           for chain 0 and 1 "-a 3"
+  -o : Traffic ID (priority 0-15)
+  -x : repeat with the interval in milliseconds
+  -p : tx power at 0.5dbm step. (eg : value 10 is 5dbm)
+  -k : number of packets
+  -l : payload length in bytes
+  -f : input file with contents to transmit
+  -e : 802.3 frame with LLC header
+       If this flag is not present, an 802.11 frame with EPD header
+       will be sent.
+  -v : send a VSA frame instead of data frame. This will always use
+       an 802.11 frame.
+@endverbatim
+
+<b>Example</b>
+
+To transmit 10 packets of 500 bytes each 100 milliseconds apart, at 2.5 dbm transmit power
+at 6 mbps data rate (assume 10 Mhz channel bandwidth set by dsrc_set_chan):
+
+@verbatim
+  dsrc_tx -m 2 -p 5 -k 10 -l 500 -x 100
+@endverbatim
+
+If two channels have been configured to alternate according to a schedule, the
+-c option is used to specify on which channel to transmit. Note that -c
+cannot be used to transmit on a channel that has not been configured. For example,
+after configuring channels 5860 and 5900 without <tt>dsrc_set_chan</tt> or <tt>dsrc_config</tt>,
+this command can be used to transmit a packet on channel 5860 at 5 dbm:
+
+@verbatim
+  dsrc_tx -c 5860 -p 10
+@endverbatim
+
+If the device has been configured for two channels but the -c option is not provided,
+the packet may be transmitted on either channel.
+
+@subsection receive_app Receive Application
+
+Usage:
+@verbatim
+  dsrc_rx [-i <interface>] [-d] [-f <input file>
+  Defaults: interface wlanocb0, no dump
+  -d : dump raw packet
+  -i <interface> : interface name as found in listing by ifconfig
+  -f : output file
+  -e : expect to receive 802.3 frames. Otherwise expect to receive 802.11 frames.
+@endverbatim
+
+@subsection configuration_app Configuration Application
+
+Usage:
+@verbatim
+  dsrc_config [-i <interface>] -c <command> <additional parameters>
+  Defaults: interface wlanocb0
+  -i <interface> : interface name as found in listing by ifconfig
+  -c <command> : command name as specified in the list of commands
+@endverbatim
+
+Each command will have a separate list of additional parameters.
+
+@subsubsection commands_list List of commands
+
+<b>set_config</b>
+
+Description: Sets the complete OCB configuration, including DCC paramters.
+The DCC parameters are read from the dcc.dat file, which should be in the
+same folder as the dsrc_config executable.
+Usage:
+@verbatim
+  dsrc_config -c set_config [-i <interface>] [-o <channel options>]
+  -o <channel options> :
+      Used for set_config, get_stats, start_ta and stop_ta.
+      num_channels={1|2} :
+         when 1 channel_freq0 and channel_bandwidth0 are needed.
+         when 2 same as 1, additionally freq1 and bandwidth1 are needed.
+      channel_freq0=<center frequency in MHz>
+      channel_bandwidth0=<bandwidth in MHz>
+      tx_power0=<max transmit power in dbm>
+      duration0=<channel schedule duration in ms>
+      guard0=<schedule start guard interval in ms>
+      disable_rx_stats0={0|1} :
+         when 0 (default) RX stats headers are added.
+         when 1 RX stats headers are not added.
+      channel_freq1=<center frequency in MHz>
+      channel_bandwidth1=<bandwidth in MHz>
+      tx_power1=<max transmit power on channel_freq1>
+      duration1=<channel schedule duration in ms>
+      guard1=<schedule start guard interval in ms>
+      disable_rx_stats1={0|1} :
+         when 0 (default) RX stats headers are added.
+         when 1 RX stats headers are not added.
+      expiry_tsf={0|1} :
+         when 0 (default) expiry time in TX options is relative.
+         when 1 expiry time in TX options is interpreted as a TSF time.
+      eth_mode={0|1} :
+         when 0 (default) the app must send 802.11 frames and firmware will not convert.
+         when 1 the firmware will convert 802.3 frames to 802.11.
+  -d :
+      Enable DCC parameters if this option is present.
+        Used for the set_config command.
+@endverbatim
+
+For example, to configure channel 5860:
+@verbatim
+  dsrc_config -c set_config -o channel_freq0=5860
+@endverbatim
+
+To configure channel 5875 with a 20 MHz bandwidth:
+@verbatim
+  dsrc_config -c set_config -o channel_freq0=5875,channel_bandwidth0=20
+@endverbatim
+
+<b>Note:</b> There must not be any spaces between the suboptions provided for -o.
+
+To configure channels 5860 and 5900 to alternate with 100 ms on each channel with a
+15 ms guard interval:
+@verbatim
+  dsrc_config -c set_config -o num_channels=2,channel_freq0=5860,duration0=100,
+  guard0=15,channel_freq1=5900,duration1=100,guard1=15
+@endverbatim
+
+<b>Note:</b> The guard interval is included in the duration.
+
+<b>ndl_update</b>
+
+Description: Updates the DCC NDL parameters. The DCC parameters will be read
+from the dcc.dat file, which should be in the same folder as the dsrc_config
+executable.
+
+Usage: <tt>dsrc_config -c ndl_update</tt>
+
+<b>get_stats</b>
+
+Description: Reads the DCC statistics and displays them.
+
+Usage: <tt>dsrc_config -c get_stats</tt>
+
+<b>stats_event</b>
+
+Description: Listens for DCC statistics events. The WLAN driver sends
+periodic updates of the DCC statistics and they are displayed in the
+terminal.
+
+Usage:
+@verbatim
+  dsrc_config -c stats_event -o <channel options></tt>
+  -o <channel options> :
+      num_channels={1|2} :
+      channel_freq0=<center frequency in MHz>
+      channel_freq1=<center frequency in MHz>
+@endverbatim
+
+<b>Note:</b>
+There must not be any spaces between the suboptions provided for -o.
+
+<b>clear_stats</b>
+
+Description: Resets the DCC statistics to their initial state. This clears
+all DCC statistics.
+
+Usage: <tt>dsrc_config -c clear_stats</tt>
+
+<b>set_utc</b>
+
+Description: Sends the system time in 802.11p-defined UTC format to the WLAN
+host driver. UTC time in this case is defined as the number of nanoseconds from
+Jan. 1, 1958.
+
+Usage: <tt>dsrc_config -c set_utc</tt>
+
+<b>start_ta</b>
+
+Description: Starts sending timing advertisement (TA) frames on a specified channel
+and at a specified repeat rate. The repeat rate is defined as the number of times the
+TA frame will be sent during a 5-second interval. The set_utc command must
+be executed before this command.
+
+Usage: <tt>dsrc_config -c start_ta -o channel_freq0=\<channel freq\> -r \<repeat rate\></tt>
+
+For example, to configure the device to transmit the timing advertisement frame
+once per second on channel 5860:
+@verbatim
+  dsrc_config -c set_config -o channel_freq0=5860
+  dsrc_config -c set_utc
+  dsrc_config -c start_ta -o channel_freq0=5860 -r 5
+@endverbatim
+
+<b>stop_ta</b>
+
+Description: Stops sending timing advertisement frames on a specified channel.
+
+Usage: <tt>dsrc_config -c stop_ta -o channel_freq0=\<channel freq\></tt>
+
+<b>get_tsf</b>
+
+Description: Gets the timing synchronization function (TSF) timer value and displays
+it as a 64-bit integer.
+
+Usage: <tt>dsrc_config -c get_tsf</tt>
+
+<b>rx_vsa</b>
+
+Description: Receive and display Vendor Specific Action frames.
+
+Usage: <tt>dsrc_config -c rx_vsa</tt>
+
+@section example_use_cases Example Use Cases
+
+@subsection multi-channel_operation Multi-channel operation using 3 devices (DUTs)
+
+A 1pps signal must be present at GPIO1.
+
+@subsubsection tx_multi-channel Tx multi-channel, Rx single channel
+
+DUT 1 -- Tx multi-channel, channels 5870 and 5900:
+@verbatim
+  ./dsrc_set_chan -c num_channels=2,channel_freq0=5870,channel_bandwidth0=10,
+  channel_freq1=5900,channel_bandwidth1=10
+  ./dsrc_tx -c 5870 -p 1 -m 0 -a 1 -x 5000& ./dsrc_tx -c 5900 -p 1 -m 0 -a 1 -x 5000
+@endverbatim
+@newpage
+DUT 2 -- Rx single channel, channel 5870:
+@verbatim
+  ./dsrc_set_chan -c 5870
+  ./dsrc_rx
+@endverbatim
+
+DUT 3 -- Rx single channel, channel 5900:
+@verbatim
+  ./dsrc_set_chan -c 5900
+  ./dsrc_rx
+@endverbatim
+
+@subsubsection tx_multi-channel Tx multi-channel, Rx multi-channel
+
+DUT 1 -- Tx multi-channel, channels 5870 and 5900:
+@verbatim
+  ./dsrc_set_chan -c num_channels=2,channel_freq0=5870,channel_bandwidth0=10,
+    channel_freq1=5900,channel_bandwidth1=10
+  ./dsrc_tx -c 5870 -p 1 -m 0 -a 1 -x 2000& ./dsrc_tx -c 5900 -p 1 -m 0 -a 1 -x 2000
+@endverbatim
+
+DUT 2 -- Rx multi-channel, channels 5870 and 5900:
+@verbatim
+  ./dsrc_set_chan -c num_channels=2,channel_freq0=5870,channel_bandwidth0=10,
+    channel_freq1=5900,channel_bandwidth1=10
+  ./dsrc_rx
+@endverbatim
+
+DUT 3 -- Rx multi-channel, channels 5870 and 5900:
+@verbatim
+  ./dsrc_set_chan -c num_channels=2,channel_freq0=5870,channel_bandwidth0=10,
+    channel_freq1=5900,channel_bandwidth1=10
+  ./dsrc_rx
+@endverbatim
+
+@subsubsection timing_advertisement Timing Advertisement
+
+DUT 1 -- Tx
+@verbatim
+  Connect 1pps
+  ./dsrc_set_chan -c 5870
+  ./dsrc_config -c set_utc
+  ./dsrc_config -c start_ta -r 3 -o channel_freq0=5870
+  ./dsrc_config -c stop_ta
+@endverbatim
+
+DUT 2 -- Rx
+@verbatim
+  ./dsrc_set_chan -c 5870
+@endverbatim
+*/

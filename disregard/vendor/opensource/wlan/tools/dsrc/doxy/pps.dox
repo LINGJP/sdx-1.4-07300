@@ -1,0 +1,57 @@
+/*
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/**
+@page pps Pulse Per Second
+
+The pulse per second (PPS) signal is used by the Wi-Fi modem (e.g., QCA6584) for channel switching operations
+when configured for alternate channel switching, as described in IEEE 1609.4. The rising edge of this signal is
+required to be synchronized to a UTC 1 sec roll. In the event that this signal stops due to a loss of
+the source, the alternating mode will cease and continue in a single channel mode. The channel configured
+for index 0 will be used in single channel mode. The alternating mode will resume with the PPS signal.
+
+The PPS signal is also required for QCA6584 to broadcast the Timing Advertisement frames.
+UTC time maintained in the modem will be disciplined with the PPS signal.
+
+These are the specifications of the 1PPS pulse (1 pulse per second):
+
+- Allowable delta from UTC: +/- 440 uSec
+- Amplitude:  Voltage level of the SDIO domain on QCA6584<br>
+            If the SDIO voltage domain is 3.3 V, the 1PPS should be 0 V to 3.3 V<br>
+            If the SDIO voltage domain is 1.8 V, the 1PPS should be 0 V to 1.8 V<br>
+            e.g., on MDM9x15, the SDIO domain is 1.8 V
+- Connection:  GPIO1 on QCA6584
+
+When no PPS pulse is present:
+- The dual channel mode will revert to single channel.
+- If the PPS pulse resumes, the dual channel mode will also resume.
+
+Known issue:
+- In the firmware release 1.0.3 for QCA6584, the Timing Advertisement appears to continue after the PPS signal stops;
+this will be resolved in a subsequent firmware release.
+*/

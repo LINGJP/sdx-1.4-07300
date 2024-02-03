@@ -1,0 +1,45 @@
+/*
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/**
+@page revision_history Revision History
+
+@table{3,{\centering}p{0.62in},{\centering}p{0.63in},{\raggedright}p{4.76in}}
+@trfirsthdg
+@thmultcol{1,|c|} Revision @thmultcolend @thmultcol{1,c|} Date @thmultcolend @thmultcollast{1,c|} Description @thmultcollastend
+@trfirsthdgend
+@tblcapcont{Revision history (cont.)}
+@trhdg
+@thdg{1,|c|,Revision} @thdg{1,c|,Date} @thdglast{1,c|,Description}
+@trhdgend
+@tr @td A @tdend @td Aug 2015 @tdend @tdlast Initial release @tdlastend @trend
+@tr @td B @tdend @td Jan 2016 @tdend @tdlast This version has been refreshed with the latest APIs. One noticeable enhancement is the ability to transport direct 802.11 frames as the payload. In the previous revision, the support was only for an 802.3 frame payload. The addition of an 802.11 frame payload will facilitate the use of an EPD header instead of LLC for protocol discrimination. @trend
+@tableend
+
+*/
+

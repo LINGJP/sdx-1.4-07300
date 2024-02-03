@@ -1,0 +1,201 @@
+/*
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*=============================================================================
+                             Edit History
+when       who     what, where, why
+--------   ---     ------------------------------------------------------------
+09/14/15   LB      Created to support the DSRC SDK
+=============================================================================*/
+/**
+@page architecture Architecture
+
+This SDK focuses on the DSRC library, APIs, and sample
+applications included with this kit.
+
+The following diagram shows the relationship between the major components involved
+in achieving the DSRC solution. QCACLD is the WLAN host driver.
+This driver runs in the kernel and interfaces with the Atheros Wi-Fi transciever
+over the SDIO bus. The DSRC library runs in user space interacting with the QCACLD
+over IOCTL and netlink interfaces through the Linux kernel.
+
+@anchor fig_layers
+@latexonly
+\begin{figure}[H]
+  \centering
+  \includegraphics[scale=0.8]{../images/layers.png}
+  \renewcommand{\thefigure}{\thechapter-\arabic{figure}}
+  \caption{Layers}
+  \label{fig_layers}
+\end{figure}
+@endlatexonly
+
+@html_image{layers.png,Layers,20,20,Layers}
+
+The DSRC library runs in the user space of the Linux system. The application interface is
+functionally grouped as a data path interface and a control path inteface. The data path
+interface is achieved over Linux raw sockets. The control path interface uses custom
+IOCTL commands as well as netlink communication.
+
+@newpage
+
+@section intro_architecture_data Data Path
+
+In the data path, the IO is performed over Linux raw sockets.
+
+@subsection intro_architecture_data_tx_packet Sending Packets
+
+After the interface is brought up, the interface must be configured before it
+can be used. The interface can be configured
+to use 802.11 frames or 802.3 frames.
+
+If the interface is configured to use
+802.11 frames, packets to be transmitted must contain an 802.11
+header when it is sent to the raw socket.
+When a packets is received over the air, it will be sent to the application
+via the raw socket complete with the 802.11 header. The Ethertype should be
+contained in the Ethertype Protocol Discrimination (EPD) header immediately
+following the 802.11 header. The EPD header is two bytes long containing only
+the Ethertype. It replaces the 802.2 LLC-SNAP header.
+
+For DSRC operation, the interface should be configured for 802.11 frames
+since this simplifies the transmission of management frames and makes it
+possible to use the EPD header as required for DSRC.
+
+A packet for transmit can be prepended with an optional control header,
+@ref dsrc_ocb_tx_ctrl_hdr. This header would immediately precede the 802.11
+header.
+
+@anchor fig_tx_packet_0
+@latexonly
+\begin{figure}[H]
+
+  \centering
+  \includegraphics[scale=1]{../images/tx_packet_0.png}
+  \renewcommand{\thefigure}{\thechapter-\arabic{figure}}
+  \caption{802.11 with Ethertype Protocol Discrimination (EPD) header}
+  \label{fig_tx_packet_0}
+\end{figure}
+@endlatexonly
+
+@html_image{tx_packet_0.png,
+  802.11 with Ethertype Protocol Discrimination (EPD) header,35,35,
+  802.11 with Ethertype Protocol Discrimination (EPD) header}
+
+If the interface is
+configured for 802.3 frames, packets sent to the raw socket to be
+transmitted must contain the 802.3 header. The Wi-Fi hardware will convert
+the 802.3 header to an 802.11 header with an 802.2 LLC-SNAP header when transmitting
+the packet. Similarly,
+when a packet is received over the air, the Wi-Fi hardware will convert the
+802.11 header and 802.2 LLC-SNAP header to an 802.3 header,
+and the application will receive a packet
+with an 802.3 header via the raw socket. It is not possible to use the EPD
+header when the interface is configured for 802.3 frames.
+
+A packet for transmit can be prepended with an optional control header,
+@ref dsrc_ocb_tx_ctrl_hdr. This header would immediately precede the 802.3
+header.
+
+@newpage
+
+@anchor fig_tx_packet_1
+@latexonly
+\begin{figure}[H]
+
+  \centering
+  \includegraphics[scale=1]{../images/tx_packet_1.png}
+  \renewcommand{\thefigure}{\thechapter-\arabic{figure}}
+  \caption{802.3 with Ethertype}
+  \label{fig_tx_packet_1}
+\end{figure}
+@endlatexonly
+
+@html_image{tx_packet_1.png,802.3 with Ethertype,35,35,802.3 with Ethertype}
+
+@anchor fig_tx_packet_2
+@latexonly
+\begin{figure}[H]
+
+  \centering
+  \includegraphics[scale=1]{../images/tx_packet_2.png}
+  \renewcommand{\thefigure}{\thechapter-\arabic{figure}}
+  \caption{802.3 header with 802.2 LLC-SNAP header carrying the Ethertype}
+  \label{fig_tx_packet_2}
+\end{figure}
+@endlatexonly
+
+@html_image{tx_packet_2.png,
+  802.3 header with 802.2 LLC-SNAP header carrying the Ethertype,35,35,
+  802.3 header with 802.2 LLC-SNAP header carrying the Ethertype}
+
+@subsection intro_architecture_data_rx_packet Receiving Packets
+
+A received packet also provides optional information (\ref dsrc_ocb_rx_stats_hdr)
+describing the packet's data rate, received power, priority, etc. If the
+interface is configured to use 802.11 headers, the packet will be received with an
+802.11 header with the EtherType in an EPD header. This is the default behavior.
+If the interface is configured to 802.3 headers, the packet
+will be received with an 802.3 header with the EtherType either in the 802.3
+header or in an 802.2 LLC-SNAP header.
+
+Use @ref dsrc_socket_recv_eth_frame_and_stats() for incoming packets.
+
+@anchor fig_rx_packet_raw
+@latexonly
+\begin{figure}[H]
+
+  \centering
+  \includegraphics[scale=1]{../images/rx_packet_raw.png}
+  \renewcommand{\thefigure}{\thechapter-\arabic{figure}}
+  \caption{802.11 header with EPD header carrying the Ethertype}
+  \label{fig_rx_packet_raw}
+\end{figure}
+@endlatexonly
+
+@html_image{rx_packet_raw.png,
+  802.11 header with EPD header carrying the Ethertype,35,35,
+  802.11 header with EPD header carrying the Ethertype}
+
+@anchor fig_rx_packet
+@latexonly
+\begin{figure}[H]
+
+  \centering
+  \includegraphics[scale=1]{../images/rx_packet.png}
+  \renewcommand{\thefigure}{\thechapter-\arabic{figure}}
+  \caption{802.3 header with 802.2 LLC-SNAP header carrying the Ethertype}
+  \label{fig_rx_packet}
+\end{figure}
+@endlatexonly
+
+@html_image{rx_packet.png,
+  802.3 header with 802.2 LLC-SNAP header carrying the Ethertype,35,35,
+  802.3 header with 802.2 LLC-SNAP header carrying the Ethertype}
+
+*/
