@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+# Copyright (c) 2020, The Linux Foundation. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 2 and
@@ -25,10 +25,7 @@ class KBootLog(RamParser):
             self.struct_name = 'struct printk_log'
 
     def parse(self):
-        if self.ramdump.kernel_version >= (5, 10):
-            self.extract_kernel_boot_log()
-        else:
-            self.extract_kboot_log()
+        self.extract_kboot_log()
 
     def log_next(self, idx, logbuf):
         len_offset = self.ramdump.field_offset(self.struct_name, 'len')
@@ -40,19 +37,6 @@ class KBootLog(RamParser):
             return logbuf
         else:
             return idx + msg_len
-
-    def extract_kernel_boot_log(self):
-        logbuf_addr = self.ramdump.read_word(self.ramdump.address_of(
-                                     'boot_log_buf'))
-        logbuf_size = self.ramdump.read_u32("boot_log_buf_size")
-        if logbuf_size is None:
-            logbuf_size = 524288
-        if logbuf_addr:
-            data = self.ramdump.read_cstring(logbuf_addr, logbuf_size)
-            self.outfile.write(data)
-        else:
-            self.outfile.write("kernel boot log support is not present\n")
-            return
 
     def extract_kboot_log(self):
         last_idx_addr = self.ramdump.address_of('log_next_idx')

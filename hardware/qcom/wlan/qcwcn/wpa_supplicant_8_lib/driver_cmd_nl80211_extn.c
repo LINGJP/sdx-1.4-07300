@@ -141,10 +141,11 @@ int wpa_driver_oem_initialize(wpa_driver_oem_cb_table_t **oem_cb_table)
 		}
 	}
 
-	oem_cb_array[lib_n].wpa_driver_driver_cmd_oem_cb = NULL;
-	*oem_cb_table = oem_cb_array;
-	wpa_printf(MSG_DEBUG, "%s: OEM lib initialized\n", __func__);
-	closedir(oem_lib_dir);
+	if (lib_n) {
+		oem_cb_array[lib_n].wpa_driver_driver_cmd_oem_cb = NULL;
+		*oem_cb_table = oem_cb_array;
+		wpa_printf(MSG_DEBUG, "%s: OEM lib initialized\n", __func__);
+	}
 
 	return WPA_DRIVER_OEM_STATUS_SUCCESS;
 }

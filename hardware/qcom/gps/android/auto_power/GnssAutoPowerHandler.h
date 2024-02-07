@@ -34,7 +34,7 @@
 #include <android/hardware/automotive/vehicle/2.0/IVehicle.h>
 #include <unordered_map>
 #include <dlfcn.h>
-#include <ILocationAPI.h>
+#include <LocationAPI.h>
 
 
 using ::android::hardware::Return;
@@ -93,7 +93,7 @@ private:
     std::unordered_map<int32_t, bool> mSupportedProperties;
     sp<VHidlDeathRecipient> mVHidlDeathRecipient;
     sp<IVehicle> mVhalService GUARDED_BY(mMutex);
-    ILocationControlAPI    *mLocationControlApi;
+    LocationControlAPI    *mLocationControlApi;
 
 }; //class PowerStateHandler
 

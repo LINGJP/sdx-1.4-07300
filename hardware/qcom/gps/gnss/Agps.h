@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, 2020-2021 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -44,7 +44,7 @@ using namespace loc_util;
 typedef std::function<void(
         int handle, int isSuccess, char* apn, uint32_t apnLen,
         AGpsBearerType bearerType, AGpsExtType agpsType,
-        ApnTypeMask mask)> AgpsAtlOpenStatusCb;
+        LocApnTypeMask mask)> AgpsAtlOpenStatusCb;
 
 typedef std::function<void(int handle, int isSuccess)> AgpsAtlCloseStatusCb;
 
@@ -102,11 +102,11 @@ public:
      * inactive state. */
     bool mWaitForCloseComplete;
     bool mIsInactive;
-    ApnTypeMask mApnTypeMask;
+    LocApnTypeMask mApnTypeMask;
 
     inline AgpsSubscriber(
             int connHandle, bool waitForCloseComplete, bool isInactive,
-            ApnTypeMask apnTypeMask) :
+            LocApnTypeMask apnTypeMask) :
             mConnHandle(connHandle),
             mWaitForCloseComplete(waitForCloseComplete),
             mIsInactive(isInactive),
@@ -139,7 +139,7 @@ protected:
     /* Current state for this state machine */
     AgpsState mState;
 
-    agnssStatusIpV4Callback     mFrameworkStatusV4Cb;
+    AgnssStatusIpV4Cb     mFrameworkStatusV4Cb;
 private:
     /* AGPS Type for this state machine
        LOC_AGPS_TYPE_ANY           0
@@ -148,7 +148,7 @@ private:
        LOC_AGPS_TYPE_SUPL_ES       5 */
     AGpsExtType mAgpsType;
     LocApnTypeMask mApnTypeMask;
-    SubId mSubId;
+    LocSubId mSubId;
 
     /* APN and IP Type info for AGPS Call */
     char* mAPN;
@@ -171,17 +171,17 @@ public:
     inline char* getAPN() const { return (char*)mAPN; }
     inline uint32_t getAPNLen() const { return mAPNLen; }
     inline void setBearer(AGpsBearerType bearer) { mBearer = bearer; }
-    inline ApnTypeMask getApnTypeMask() const { return mApnTypeMask; }
-    inline void setApnTypeMask(ApnTypeMask apnTypeMask)
+    inline LocApnTypeMask getApnTypeMask() const { return mApnTypeMask; }
+    inline void setApnTypeMask(LocApnTypeMask apnTypeMask)
     { mApnTypeMask = apnTypeMask; }
-    inline void setSubId(SubId subId) { mSubId = subId; }
+    inline void setSubId(LocSubId subId) { mSubId = subId; }
     inline AGpsBearerType getBearer() const { return mBearer; }
     inline void setType(AGpsExtType type) { mAgpsType = type; }
     inline AGpsExtType getType() const { return mAgpsType; }
     inline void setCurrentSubscriber(AgpsSubscriber* subscriber)
     { mCurrentSubscriber = subscriber; }
 
-    inline void registerFrameworkStatusCallback(agnssStatusIpV4Callback frameworkStatusV4Cb) {
+    inline void registerFrameworkStatusCallback(AgnssStatusIpV4Cb frameworkStatusV4Cb) {
         mFrameworkStatusV4Cb = frameworkStatusV4Cb;
     }
 
@@ -263,7 +263,7 @@ public:
 
     /* Process incoming ATL requests */
     void requestATL(int connHandle, AGpsExtType agpsType,
-                    LocApnTypeMask apnTypeMask, SubId subId);
+                    LocApnTypeMask apnTypeMask, LocSubId subId);
     void releaseATL(int connHandle);
     /* Process incoming framework data call events */
     void reportAtlOpenSuccess(AGpsExtType agpsType, char* apnName, int apnLen,
@@ -295,11 +295,11 @@ struct AgpsMsgRequestATL: public LocMsg {
     int mConnHandle;
     AGpsExtType mAgpsType;
     LocApnTypeMask mApnTypeMask;
-    SubId mSubId;
+    LocSubId mSubId;
 
     inline AgpsMsgRequestATL(AgpsManager* agpsManager, int connHandle,
             AGpsExtType agpsType, LocApnTypeMask apnTypeMask,
-            SubId subId) :
+            LocSubId subId) :
             LocMsg(), mAgpsManager(agpsManager), mConnHandle(connHandle),
             mAgpsType(agpsType), mApnTypeMask(apnTypeMask), mSubId(subId){
 

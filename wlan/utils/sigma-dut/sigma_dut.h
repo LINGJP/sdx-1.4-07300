@@ -15,7 +15,6 @@
 #endif
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -43,14 +42,7 @@
 #include "nl80211_copy.h"
 #endif /* NL80211_SUPPORT */
 #ifdef ANDROID_WIFI_HAL
-/* avoid duplicate definitions from wifi_hal.h causing issues */
-#define u32 wifi_hal_u32
-#define u16 wifi_hal_u16
-#define u8 wifi_hal_u8
 #include "wifi_hal.h"
-#undef u32
-#undef u16
-#undef u8
 #endif /*ANDROID_WIFI_HAL*/
 
 #ifdef NL80211_SUPPORT
@@ -88,6 +80,10 @@
 #define ETH_P_ARP 0x0806
 #endif
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(x) (sizeof((x)) / (sizeof(((x)[0]))))
+#endif
+
 #define IPV6_ADDR_LEN 16
 
 struct sigma_dut;
@@ -118,14 +114,6 @@ struct wfa_p2p_attribute {
 	uint16_t len;
 	uint8_t variable[0];
 } __attribute__((packed));
-
-struct dut_hw_modes {
-	u16 ht_capab;
-	u8 mcs_set[16];
-	u8 ampdu_params;
-	u32 vht_capab;
-	u8 vht_mcs_set[8];
-};
 
 #define WPA_GET_BE32(a) ((((u32) (a)[0]) << 24) | (((u32) (a)[1]) << 16) | \
 			 (((u32) (a)[2]) << 8) | ((u32) (a)[3]))
@@ -331,7 +319,6 @@ struct nl80211_ctx {
 	int netlink_familyid;
 	int nlctrl_familyid;
 	size_t sock_buf_size;
-	struct nl_sock *event_sock;
 };
 #endif /* NL80211_SUPPORT */
 
@@ -369,7 +356,6 @@ struct sigma_dut {
 	char *station_ifname_5g;
 	char *p2p_ifname_buf;
 	int use_5g;
-	int ap_band_6g;
 	int sta_2g_started;
 	int sta_5g_started;
 
@@ -383,7 +369,6 @@ struct sigma_dut {
 
 	/* Default timeout value (seconds) for commands */
 	unsigned int default_timeout;
-	unsigned int user_config_timeout;
 
 	int next_streamid;
 
@@ -491,7 +476,6 @@ struct sigma_dut {
 	enum value_not_set_enabled_disabled ap_amsdu;
 	enum value_not_set_enabled_disabled ap_rx_amsdu;
 	int ap_ampdu_exp;
-	int ap_max_mpdu_len;
 	enum value_not_set_enabled_disabled ap_addba_reject;
 	int ap_fixed_rate;
 	int ap_mcs;
@@ -960,8 +944,6 @@ struct sigma_dut {
 
 	int sta_nss;
 
-	int sta_async_twt_supp; /* Asynchronous TWT response event support */
-
 #ifdef ANDROID
 	int nanservicediscoveryinprogress;
 #endif /* ANDROID */
@@ -983,15 +965,10 @@ struct sigma_dut {
 		SAE_PWE_H2E
 	} sae_pwe;
 	int owe_ptk_workaround;
-	struct dut_hw_modes hw_modes;
 	int ocvc;
-	int beacon_prot;
 	int client_privacy;
-	int client_privacy_default;
 	int saquery_oci_freq;
 	char device_driver[32];
-	int user_config_ap_ocvc;
-	int user_config_ap_beacon_prot;
 };
 
 

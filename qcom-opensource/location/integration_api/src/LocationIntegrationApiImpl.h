@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -33,6 +33,7 @@
 
 #include <loc_pla.h>
 #include <LocIpc.h>
+#include <LocationDataTypes.h>
 #include <ILocationAPI.h>
 #include <LocationIntegrationApi.h>
 #include <MsgTask.h>
@@ -54,7 +55,6 @@ namespace location_integration
 {
 typedef std::unordered_map<LocConfigTypeEnum, int32_t> LocConfigReqCntMap;
 typedef std::unordered_map<PositioningEngineMask, LocEngineRunState> LocConfigEngRunStateMap;
-typedef std::unordered_map<PositioningEngineMask, uint32_t> LocConfigEngIntegrityRiskMap;
 
 typedef struct {
     bool     isValid;
@@ -103,7 +103,7 @@ class LocationIntegrationApiImpl : public ILocationControlAPI {
 public:
     LocationIntegrationApiImpl(LocIntegrationCbs& integrationCbs);
 
-    virtual void destroy() override;
+    void destroy();
 
     // convenient methods
     inline bool sendMessage(const uint8_t* data, uint32_t length) const {
@@ -137,7 +137,6 @@ public:
     uint32_t getConstellationSecondaryBandConfig();
 
     uint32_t configEngineRunState(PositioningEngineMask engType, LocEngineRunState engState);
-    uint32_t configEngineIntegrityRisk(PositioningEngineMask engType, uint32_t integrityRisk);
 
     uint32_t setUserConsentForTerrestrialPositioning(bool userConsent);
 
@@ -185,7 +184,6 @@ private:
     RobustLocationConfigInfo mRobustLocationConfigInfo;
     DeadReckoningEngineConfigInfo mDreConfigInfo;
     LocConfigEngRunStateMap       mEngRunStateConfigMap;
-    LocConfigEngIntegrityRiskMap  mEngIntegrityRiskConfigMap;
     GtpUserConsentConfigInfo      mGtpUserConsentConfigInfo;
     NmeaConfigInfo                mNmeaConfigInfo;
     LocConfigReqCntMap       mConfigReqCntMap;

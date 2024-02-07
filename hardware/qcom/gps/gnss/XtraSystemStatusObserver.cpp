@@ -135,7 +135,7 @@ XtraSystemStatusObserver::XtraSystemStatusObserver(IOsObserver* sysStatObs,
 bool XtraSystemStatusObserver::updateLockStatus(GnssConfigGpsLock lock) {
     // mask NI(NFW bit) since from XTRA's standpoint GPS is enabled if
     // MO(AFW bit) is enabled and disabled when MO is disabled
-    mGpsLock = lock & ~GNSS_CONFIG_GPS_LOCK_NFW_ALL;
+    mGpsLock = lock & ~GNSS_CONFIG_GPS_LOCK_NI;
 
     if (!mReqStatusReceived) {
         return true;

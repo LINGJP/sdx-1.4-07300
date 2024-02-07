@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -63,6 +63,8 @@ struct GnssAntennaInfo : public IGnssAntennaInfo {
 
     void gnssAntennaInfoCb(std::vector<GnssAntennaInformation> gnssAntennaInformations);
 
+    static void aiGnssAntennaInfoCb(std::vector<GnssAntennaInformation> gnssAntennaInformations);
+
  private:
     struct GnssAntennaInfoDeathRecipient : hidl_death_recipient {
         GnssAntennaInfoDeathRecipient(sp<GnssAntennaInfo> gnssAntennaInfo) :
@@ -77,7 +79,6 @@ struct GnssAntennaInfo : public IGnssAntennaInfo {
     sp<GnssAntennaInfoDeathRecipient> mGnssAntennaInfoDeathRecipient = nullptr;
     sp<IGnssAntennaInfoCallback> mGnssAntennaInfoCbIface = nullptr;
     Gnss* mGnss = nullptr;
-    bool mCallBackIsSet = false;
 };
 
 }  // namespace implementation

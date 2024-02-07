@@ -312,9 +312,6 @@ static int wcn_config_ap_fils_dscv(struct sigma_dut *dut, const char *ifname)
 #ifdef NL80211_SUPPORT
 	uint8_t enable_fils_dscv = dut->ap_filsdscv == VALUE_ENABLED;
 
-	if (dut->ap_filsdscv == VALUE_NOT_SET)
-		return 0;
-
 	return wcn_wifi_test_config_set_u8(
 		dut, ifname,
 		QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_FILS_DISCOVERY_FRAMES_TX,
@@ -322,8 +319,6 @@ static int wcn_config_ap_fils_dscv(struct sigma_dut *dut, const char *ifname)
 #else /* NL80211_SUPPORT */
 	sigma_dut_print(dut, DUT_MSG_ERROR,
 			"FILS Discovery frames configuration can't be set without NL80211_SUPPORT defined");
-	if (dut->ap_filsdscv == VALUE_NOT_SET)
-		return 0;
 	return -1;
 #endif /* NL80211_SUPPORT */
 }
@@ -766,14 +761,6 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 		}
 	}
 
-	val = get_param(cmd, "ChnlFreq");
-	if (val) {
-		if (atoi(val) >= 5935 && atoi(val) <= 7115)
-			dut->ap_band_6g = 1;
-		else
-			dut->ap_band_6g = 0;
-	}
-
 	/* Overwrite the AP channel with DFS channel if configured */
 	val = get_param(cmd, "dfs_chan");
 	if (val) {
@@ -856,9 +843,7 @@ static enum sigma_cmd_result cmd_ap_set_wireless(struct sigma_dut *dut,
 		dut->use_5g = 1;
 		break;
 	case AP_11ax:
-		if (dut->ap_band_6g)
-			dut->use_5g = 1;
-		else if (dut->ap_channel >= 1 && dut->ap_channel <= 14)
+		if (dut->ap_channel >= 1 && dut->ap_channel <= 14)
 			dut->use_5g = 0;
 		else if (dut->ap_channel >= 36 && dut->ap_channel <= 171)
 			dut->use_5g = 1;
@@ -3663,12 +3648,13 @@ static int owrt_ap_config_vap(struct sigma_dut *dut)
 					owrt_ap_set_list_vap(dut, vap_count +
 							     (wlan_tag - 1),
 							     "owe_groups", buf);
+					if (dut->owe_ptk_workaround)
+						owrt_ap_set_list_vap(
+							dut, vap_count +
+							(wlan_tag - 1),
+							"owe_ptk_workaround",
+							"1");
 				}
-
-				if (dut->owe_ptk_workaround)
-					owrt_ap_set_list_vap(
-						dut, vap_count + (wlan_tag - 1),
-						"owe_ptk_workaround", "1");
 			}
 		}
 
@@ -3991,11 +3977,11 @@ static int owrt_ap_config_vap(struct sigma_dut *dut)
 					 dut->ap_sae_groups);
 				owrt_ap_set_list_vap(dut, vap_count,
 						     "owe_groups", buf);
+				if (dut->owe_ptk_workaround)
+					owrt_ap_set_list_vap(
+						dut, vap_count,
+						"owe_ptk_workaround", "1");
 			}
-
-			if (dut->owe_ptk_workaround)
-				owrt_ap_set_list_vap(dut, vap_count,
-						     "owe_ptk_workaround", "1");
 
 			if (dut->ap_key_mgmt == AP_WPA2_OWE &&
 			    dut->ap_tag_ssid[0][0] &&
@@ -4363,15 +4349,14 @@ static int owrt_ap_config_vap(struct sigma_dut *dut)
 		owrt_ap_set_list_vap(dut, vap_count, "sae_groups", buf);
 	}
 
-	if (dut->sae_pwe != SAE_PWE_DEFAULT || dut->sae_h2e_default ||
-	    dut->ap_band_6g) {
+	if (dut->sae_pwe != SAE_PWE_DEFAULT || dut->sae_h2e_default) {
 		const char *sae_pwe = NULL;
 
 		if (dut->sae_pwe == SAE_PWE_LOOP && sae_pw_id_used(dut))
 			sae_pwe = "3";
 		else if (dut->sae_pwe == SAE_PWE_LOOP)
 			sae_pwe = "0";
-		else if (dut->sae_pwe == SAE_PWE_H2E || dut->ap_band_6g)
+		else if (dut->sae_pwe == SAE_PWE_H2E)
 			sae_pwe = "1";
 		else if (dut->sae_h2e_default)
 			sae_pwe = "2";
@@ -7476,30 +7461,16 @@ static void set_ebtables_forward_drop(struct sigma_dut *dut,
 }
 
 
-static int check_channel(struct sigma_dut *dut, int channel)
+static int check_channel(int channel)
 {
 	int channel_list[] = { 36, 40, 44, 48, 52, 60, 64, 100, 104, 108, 112,
 			       116, 120, 124, 128, 132, 140, 144, 149, 153, 157,
 			       161, 165 };
-	int chan_list_6g[] = { 2, 1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45,
-			       49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93,
-			       97, 101, 105, 109, 113, 117, 121, 125, 129, 133,
-			       137, 141, 145, 149, 153, 157, 161, 165, 169, 173,
-			       177, 181, 185, 189, 193, 197, 201, 205, 209, 213,
-			       217, 221, 225, 229, 233 };
-	int num_chan, *chan_list;
+	int num_chan = sizeof(channel_list) / sizeof(int);
 	int i;
 
-	if (dut->ap_band_6g) {
-		num_chan = ARRAY_SIZE(chan_list_6g);
-		chan_list = chan_list_6g;
-	} else {
-		num_chan = ARRAY_SIZE(channel_list);
-		chan_list = channel_list;
-	}
-
 	for (i = 0; i < num_chan; i++) {
-		if (channel == chan_list[i])
+		if (channel == channel_list[i])
 			return i;
 	}
 
@@ -7507,57 +7478,13 @@ static int check_channel(struct sigma_dut *dut, int channel)
 }
 
 
-static int get_oper_center_freq_6g(int chwidth, int channel)
-{
-	switch (chwidth) {
-	case 20:
-		return channel;
-	case 40:
-		if ((channel & 0x7) == 0x1)
-			return channel + 2;
-		return channel - 2;
-	case 80:
-		return (channel & 0xFF1) + 6;
-	case 160:
-		return (channel & 0xFE1) + 14;
-	default:
-		return -1;
-	}
-}
-
-
-static int get_6g_ch_op_class(int channel)
-{
-	if ((channel & 0x3) == 0x1)
-		return 131;
-
-	if ((channel & 0x7) == 0x3)
-		return 132;
-
-	if ((channel & 0xF) == 0x7)
-		return 133;
-
-	if ((channel & 0x1F) == 0xF)
-		return 134;
-
-	if (channel == 2)
-		return 136;
-
-	return 0;
-}
-
-
-static int get_oper_centr_freq_seq_idx(struct sigma_dut *dut, int chwidth,
-				       int channel)
+static int get_oper_centr_freq_seq_idx(int chwidth, int channel)
 {
 	int ch_base;
 	int period;
 
-	if (check_channel(dut, channel) < 0)
+	if (check_channel(channel) < 0)
 		return -1;
-
-	if (dut->ap_band_6g)
-		return get_oper_center_freq_6g(chwidth, channel);
 
 	if (channel >= 36 && channel <= 64)
 		ch_base = 36;
@@ -7698,104 +7625,6 @@ static int write_hostapd_conf_password(struct sigma_dut *dut, FILE *f, int sae)
 	}
 
 	return 0;
-}
-
-
-static void fwtest_set_he_params(struct sigma_dut *dut, const char *ifname)
-{
-	/* disable sending basic triggers */
-	fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 42 0", ifname);
-	/* disable MU BAR */
-	fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 64 1", ifname);
-	/* disable PSD Boost */
-	fwtest_cmd_wrapper(dut, "-m 0x48 -v 0 142 1", ifname);
-	/* Enable mix bw */
-	fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 141 1", ifname);
-	/* Disable preferred AC */
-	fwtest_cmd_wrapper(dut, "-m 0x48 -v 0 186 0", ifname);
-	/* enable full_band_probing */
-	fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 194 0", ifname);
-	/* enable the equal RU allocation */
-	fwtest_cmd_wrapper(dut, "-m 0x4b -v 0 0 1", ifname);
-
-	if (dut->ap_he_ulofdma == VALUE_ENABLED) {
-		/* Disable sounding for UL OFDMA */
-		fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 7 0", ifname);
-		/* Set random RU allocation */
-		fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 9 1", ifname);
-		/* To set TBTT PPDU duration (us) */
-		fwtest_cmd_wrapper(dut, "-m 0x48 -v 0 63 1908", ifname);
-		/* disable enable_ul_ofdma_efficiency_check */
-		fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 131 0", ifname);
-	}
-
-	if (dut->ap_he_ppdu == PPDU_MU &&
-	    dut->ap_he_dlofdma == VALUE_ENABLED) {
-		/* Increase the min TX time limit for MU MIMO to
-		 * disable MU MIMO scheduling.
-		 */
-		fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 11 1000000", ifname);
-		/* Increase the max TX time limit for DL OFDMA
-		 * to enable OFDMA scheduling.
-		 */
-		fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 17 1000000", ifname);
-		/* Disable 'force SU schedule' to enable MU sch */
-		fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 8 0", ifname);
-		/* Enable MU 11ax support in sch algo */
-		fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 29 0", ifname);
-		/* Enable to sort RU allocation */
-		fwtest_cmd_wrapper(dut, "-m 0x4b -v 0 2 1", ifname);
-	}
-
-	if (dut->ap_txBF) {
-		/* Ignore TBTT for NDP */
-		fwtest_cmd_wrapper(dut, "-m 0x48 -v 0 2 1", ifname);
-		/* cv query enable */
-		fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 7 1", ifname);
-		/* override TPC calculations & set TxBF flag to true */
-		fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 47 1", ifname);
-	}
-
-	if (dut->he_sounding == VALUE_ENABLED)
-		fwtest_cmd_wrapper(dut, "-m 0x47 -v 0 7 0", ifname);
-}
-
-
-#define IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_3895                    0x0
-#define IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991                    0x1
-#define IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454                   0x2
-#define IEEE80211_VHT_CAP_MAX_MPDU_MASK                           0x3
-#define IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_SHIFT        23
-#define IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK         \
-	(7 << IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_SHIFT)
-
-static void find_ap_ampdu_exp_and_max_mpdu_len(struct sigma_dut *dut)
-{
-
-#ifdef NL80211_SUPPORT
-	int ampdu_exp = 0;
-	int max_mpdu_len = 0;
-	u32 vht_caps = dut->hw_modes.vht_capab;
-
-	ampdu_exp = (vht_caps &
-		     IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK) >>
-		IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_SHIFT;
-
-	if (ampdu_exp >= 0 && ampdu_exp <= 7)
-		dut->ap_ampdu_exp = ampdu_exp;
-
-	max_mpdu_len = vht_caps & IEEE80211_VHT_CAP_MAX_MPDU_MASK;
-
-	if (max_mpdu_len == IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454)
-		dut->ap_max_mpdu_len = 11454;
-	else if (max_mpdu_len == IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991)
-		dut->ap_max_mpdu_len = 7991;
-	else if (max_mpdu_len == IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_3895)
-		dut->ap_max_mpdu_len = 3895;
-#else /* NL80211_SUPPORT */
-	sigma_dut_print(dut, DUT_MSG_DEBUG,
-			"nl80211 is not supported to get A-MPDU parameters");
-#endif /* NL80211_SUPPORT */
 }
 
 
@@ -8219,10 +8048,11 @@ enum sigma_cmd_result cmd_ap_config_commit(struct sigma_dut *dut,
 		fprintf(f, "wpa_key_mgmt=OWE\n");
 		fprintf(f, "rsn_pairwise=%s\n",
 			hostapd_cipher_name(dut->ap_cipher));
-		if (dut->ap_sae_groups)
+		if (dut->ap_sae_groups) {
 			fprintf(f, "owe_groups=%s\n", dut->ap_sae_groups);
-		if (dut->owe_ptk_workaround)
-			fprintf(f, "owe_ptk_workaround=1\n");
+			if (dut->owe_ptk_workaround)
+				fprintf(f, "owe_ptk_workaround=1\n");
+		}
 		break;
 	case AP_OSEN:
 		fprintf(f, "osen=1\n");
@@ -8344,15 +8174,14 @@ skip_key_mgmt:
 	if (dut->ap_sae_groups)
 		fprintf(f, "sae_groups=%s\n", dut->ap_sae_groups);
 
-	if (dut->sae_pwe != SAE_PWE_DEFAULT || dut->sae_h2e_default ||
-	    dut->ap_band_6g) {
+	if (dut->sae_pwe != SAE_PWE_DEFAULT || dut->sae_h2e_default) {
 		const char *sae_pwe = NULL;
 
 		if (dut->sae_pwe == SAE_PWE_LOOP && sae_pw_id_used(dut))
 			sae_pwe = "3";
 		else if (dut->sae_pwe == SAE_PWE_LOOP)
 			sae_pwe = "0";
-		else if (dut->sae_pwe == SAE_PWE_H2E || dut->ap_band_6g)
+		else if (dut->sae_pwe == SAE_PWE_H2E)
 			sae_pwe = "1";
 		else if (dut->sae_h2e_default)
 			sae_pwe = "2";
@@ -8564,7 +8393,7 @@ skip_key_mgmt:
 	    (dut->program == PROGRAM_HE && dut->use_5g)) {
 		int vht_oper_centr_freq_idx;
 
-		if (check_channel(dut, dut->ap_channel) < 0) {
+		if (check_channel(dut->ap_channel) < 0) {
 			send_resp(dut, conn, SIGMA_INVALID,
 				  "errorCode,Invalid channel");
 			fclose(f);
@@ -8575,31 +8404,31 @@ skip_key_mgmt:
 		case AP_20:
 			dut->ap_vht_chwidth = AP_20_40_VHT_OPER_CHWIDTH;
 			vht_oper_centr_freq_idx =
-				get_oper_centr_freq_seq_idx(dut, 20,
+				get_oper_centr_freq_seq_idx(20,
 							    dut->ap_channel);
 			break;
 		case AP_40:
 			dut->ap_vht_chwidth = AP_20_40_VHT_OPER_CHWIDTH;
 			vht_oper_centr_freq_idx =
-				get_oper_centr_freq_seq_idx(dut, 40,
+				get_oper_centr_freq_seq_idx(40,
 							    dut->ap_channel);
 			break;
 		case AP_80:
 			dut->ap_vht_chwidth = AP_80_VHT_OPER_CHWIDTH;
 			vht_oper_centr_freq_idx =
-				get_oper_centr_freq_seq_idx(dut, 80,
+				get_oper_centr_freq_seq_idx(80,
 							    dut->ap_channel);
 			break;
 		case AP_160:
 			dut->ap_vht_chwidth = AP_160_VHT_OPER_CHWIDTH;
 			vht_oper_centr_freq_idx =
-				get_oper_centr_freq_seq_idx(dut, 160,
+				get_oper_centr_freq_seq_idx(160,
 							    dut->ap_channel);
 			break;
 		default:
 			dut->ap_vht_chwidth = VHT_DEFAULT_OPER_CHWIDTH;
 			vht_oper_centr_freq_idx =
-				get_oper_centr_freq_seq_idx(dut, 80,
+				get_oper_centr_freq_seq_idx(80,
 							    dut->ap_channel);
 			break;
 		}
@@ -8610,39 +8439,19 @@ skip_key_mgmt:
 			fprintf(f, "he_oper_chwidth=%d\n", dut->ap_vht_chwidth);
 			fprintf(f, "he_oper_centr_freq_seg0_idx=%d\n",
 				vht_oper_centr_freq_idx);
-			if (dut->ap_band_6g)
-				fprintf(f, "op_class=%d\n",
-					get_6g_ch_op_class(dut->ap_channel));
 		}
-
-		find_ap_ampdu_exp_and_max_mpdu_len(dut);
 
 		if (dut->ap_sgi80 || dut->ap_txBF ||
 		    dut->ap_ldpc != VALUE_NOT_SET ||
-		    dut->ap_tx_stbc || dut->ap_mu_txBF ||
-		    dut->ap_ampdu_exp || dut->ap_max_mpdu_len ||
-		    dut->ap_chwidth == AP_160 || dut->ap_chwidth == AP_80_80) {
-			fprintf(f, "vht_capab=%s%s%s%s%s%s",
+		    dut->ap_tx_stbc || dut->ap_mu_txBF) {
+			fprintf(f, "vht_capab=%s%s%s%s%s\n",
 				dut->ap_sgi80 ? "[SHORT-GI-80]" : "",
 				dut->ap_txBF ?
 				"[SU-BEAMFORMER][SU-BEAMFORMEE][BF-ANTENNA-2][SOUNDING-DIMENSION-2]" : "",
 				(dut->ap_ldpc == VALUE_ENABLED) ?
 				"[RXLDPC]" : "",
 				dut->ap_tx_stbc ? "[TX-STBC-2BY1]" : "",
-				dut->ap_mu_txBF ? "[MU-BEAMFORMER]" : "",
-				dut->ap_chwidth == AP_160 ? "[VHT160]" :
-				(dut->ap_chwidth == AP_80_80 ?
-				 "[VHT160-80PLUS80]" : ""));
-
-			if (dut->ap_ampdu_exp)
-				fprintf(f, "[MAX-A-MPDU-LEN-EXP%d]",
-					dut->ap_ampdu_exp);
-
-			if (dut->ap_max_mpdu_len)
-				fprintf(f, "[MAX-MPDU-%d]",
-					dut->ap_max_mpdu_len);
-
-			fprintf(f, "\n");
+				dut->ap_mu_txBF ? "[MU-BEAMFORMER]" : "");
 		}
 	}
 
@@ -8738,10 +8547,11 @@ skip_key_mgmt:
 		fprintf(f, "rsn_pairwise=CCMP\n");
 		fprintf(f, "ieee80211w=2\n");
 		fprintf(f, "ignore_broadcast_ssid=1\n");
-		if (dut->ap_sae_groups)
+		if (dut->ap_sae_groups) {
 			fprintf(f, "owe_groups=%s\n", dut->ap_sae_groups);
-		if (dut->owe_ptk_workaround)
-			fprintf(f, "owe_ptk_workaround=1\n");
+			if (dut->owe_ptk_workaround)
+				fprintf(f, "owe_ptk_workaround=1\n");
+		}
 	}
 
 	if (dut->program == PROGRAM_OCE) {
@@ -9018,9 +8828,6 @@ skip_key_mgmt:
 		}
 	}
 
-	if (drv == DRIVER_MAC80211 && dut->program == PROGRAM_HE)
-		fwtest_set_he_params(dut, ifname);
-
 	dut->hostapd_running = 1;
 	return 1;
 }
@@ -9237,147 +9044,6 @@ static void ath_reset_vht_defaults(struct sigma_dut *dut)
 }
 
 
-#ifdef NL80211_SUPPORT
-
-#define IEEE80211_HT_AMPDU_PARAM_FACTOR        0x3
-#define IEEE80211_HT_AMPDU_PARAM_DENSITY_SHIFT	2
-
-static void phy_info_ht_capa(struct dut_hw_modes *mode, struct nlattr *capa,
-			     struct nlattr *ampdu_factor,
-			     struct nlattr *ampdu_density,
-			     struct nlattr *mcs_set)
-{
-	if (capa)
-		mode->ht_capab = nla_get_u16(capa);
-
-	if (ampdu_factor)
-		mode->ampdu_params |= nla_get_u8(ampdu_factor) &
-			IEEE80211_HT_AMPDU_PARAM_FACTOR;
-
-	if (ampdu_density)
-		mode->ampdu_params |= nla_get_u8(ampdu_density) <<
-			IEEE80211_HT_AMPDU_PARAM_DENSITY_SHIFT;
-
-	if (mcs_set && nla_len(mcs_set) >= sizeof(mode->mcs_set))
-		memcpy(mode->mcs_set, nla_data(mcs_set), sizeof(mode->mcs_set));
-}
-
-
-static void phy_info_vht_capa(struct dut_hw_modes *mode,
-			      struct nlattr *capa,
-			      struct nlattr *mcs_set)
-{
-	if (capa)
-		mode->vht_capab = nla_get_u32(capa);
-
-	if (mcs_set && nla_len(mcs_set) >= sizeof(mode->vht_mcs_set))
-		memcpy(mode->vht_mcs_set, nla_data(mcs_set),
-		       sizeof(mode->vht_mcs_set));
-}
-
-
-static int phy_info_band(struct dut_hw_modes *mode, struct nlattr *nl_band)
-{
-	struct nlattr *tb_band[NL80211_BAND_ATTR_MAX + 1];
-
-	nla_parse(tb_band, NL80211_BAND_ATTR_MAX, nla_data(nl_band),
-		  nla_len(nl_band), NULL);
-
-	phy_info_ht_capa(mode, tb_band[NL80211_BAND_ATTR_HT_CAPA],
-			 tb_band[NL80211_BAND_ATTR_HT_AMPDU_FACTOR],
-			 tb_band[NL80211_BAND_ATTR_HT_AMPDU_DENSITY],
-			 tb_band[NL80211_BAND_ATTR_HT_MCS_SET]);
-
-	phy_info_vht_capa(mode, tb_band[NL80211_BAND_ATTR_VHT_CAPA],
-			  tb_band[NL80211_BAND_ATTR_VHT_MCS_SET]);
-
-	/* Other nl80211 band attributes can be parsed here, if required */
-
-	return NL_OK;
-}
-
-
-static int antenna_mask_to_nss(unsigned int mask)
-{
-	unsigned int i;
-	int msb = 0;
-
-	for (i = 0; i < sizeof(mask) * 8; i++)
-		if ((mask >> i) & 1)
-			msb = i;
-
-	return msb + 1;
-}
-
-
-static int wiphy_info_handler(struct nl_msg *msg, void *arg)
-{
-	struct nlattr *tb[NL80211_ATTR_MAX + 1];
-	struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
-	struct sigma_dut *dut = arg;
-	unsigned int tx_antenna_mask;
-	struct nlattr *nl_band;
-	int rem_band;
-
-	nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0),
-		  genlmsg_attrlen(gnlh, 0), NULL);
-
-	if (tb[NL80211_ATTR_WIPHY_ANTENNA_TX]) {
-		tx_antenna_mask =
-			nla_get_u32(tb[NL80211_ATTR_WIPHY_ANTENNA_TX]);
-		dut->ap_tx_streams = antenna_mask_to_nss(tx_antenna_mask);
-	}
-
-	if (!tb[NL80211_ATTR_WIPHY_BANDS])
-		return 1;
-
-	nla_for_each_nested(nl_band, tb[NL80211_ATTR_WIPHY_BANDS], rem_band) {
-		int res = phy_info_band(&dut->hw_modes, nl_band);
-
-		if (res != NL_OK)
-			return res;
-	}
-
-	return 0;
-}
-
-
-static int mac80211_get_wiphy(struct sigma_dut *dut)
-{
-	struct nl_msg *msg;
-	int ret = 0;
-	int ifindex;
-
-	ifindex = if_nametoindex(dut->main_ifname);
-	if (ifindex == 0) {
-		sigma_dut_print(dut, DUT_MSG_DEBUG,
-				"%s: Index for interface %s failed",
-				__func__, dut->main_ifname);
-		return -1;
-	}
-
-	if (!(msg = nl80211_drv_msg(dut, dut->nl_ctx, ifindex, 0,
-				    NL80211_CMD_GET_WIPHY)) ||
-	    nla_put_u32(msg, NL80211_ATTR_IFINDEX, ifindex)) {
-		sigma_dut_print(dut, DUT_MSG_DEBUG,
-				"%s: could not build get wiphy cmd", __func__);
-		nlmsg_free(msg);
-		return -1;
-	}
-
-	ret = send_and_recv_msgs(dut, dut->nl_ctx, msg, wiphy_info_handler,
-				 dut);
-	if (ret)
-		sigma_dut_print(dut, DUT_MSG_DEBUG,
-				"%s: err in send_and_recv_msgs, ret=%d",
-				__func__, ret);
-
-	return ret;
-}
-
-#endif /* NL80211_SUPPORT */
-
-
 static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 						  struct sigma_conn *conn,
 						  struct sigma_cmd *cmd)
@@ -9434,9 +9100,6 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_txBF = 0;
 	dut->ap_mu_txBF = 0;
 	dut->ap_chwidth = AP_AUTO;
-	dut->ap_ampdu_exp = 0;
-	dut->ap_max_mpdu_len = 0;
-	dut->ap_band_6g = 0;
 
 	dut->ap_rsn_preauth = 0;
 	dut->ap_wpsnfc = 0;
@@ -9482,7 +9145,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	free(dut->ap_sae_pk_keypair_sig);
 	dut->ap_sae_pk_keypair_sig = NULL;
 
-	dut->ap_ocvc = dut->user_config_ap_ocvc;
+	dut->ap_ocvc = -1;
 
 	if (dut->program == PROGRAM_HS2 || dut->program == PROGRAM_HS2_R2 ||
 	    dut->program == PROGRAM_HS2_R3 ||
@@ -9667,7 +9330,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 		dut->ap_broadcast_ssid = VALUE_ENABLED;
 		dut->ap_fils_dscv_int = 20;
 		dut->ap_filsdscv = dut->dev_role == DEVROLE_STA_CFON ?
-			VALUE_NOT_SET : VALUE_ENABLED;
+			VALUE_DISABLED : VALUE_ENABLED;
 		dut->ap_filshlp = VALUE_DISABLED;
 		dut->ap_rnr = VALUE_DISABLED;
 		dut->ap_nairealm[0] = '\0';
@@ -9746,13 +9409,6 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 			dut->ap_dfs_mode = AP_DFS_MODE_ENABLED;
 	}
 
-	memset(&dut->hw_modes, 0, sizeof(struct dut_hw_modes));
-#ifdef NL80211_SUPPORT
-	if (get_driver_type(dut) == DRIVER_MAC80211 && mac80211_get_wiphy(dut))
-		sigma_dut_print(dut, DUT_MSG_DEBUG,
-				"Failed to get wiphy data from the driver");
-#endif /* NL80211_SUPPORT */
-
 	dut->ap_oper_chn = 0;
 
 	dut->ap_pmksa = 0;
@@ -9781,7 +9437,7 @@ static enum sigma_cmd_result cmd_ap_reset_default(struct sigma_dut *dut,
 	dut->ap_group_mgmt_cipher = AP_NO_GROUP_MGMT_CIPHER_SET;
 	dut->ap_passphrase[0] = '\0';
 	dut->ap_psk[0] = '\0';
-	dut->ap_beacon_prot = dut->user_config_ap_beacon_prot;
+	dut->ap_beacon_prot = 0;
 	dut->ap_transition_disable = 0;
 
 	dut->dpp_conf_id = -1;
@@ -13243,7 +12899,7 @@ static int mac80211_vht_chnum_band(struct sigma_dut *dut, const char *ifname,
 	if (result)
 		chwidth = atoi(result);
 
-	center_freq_idx = get_oper_centr_freq_seq_idx(dut, chwidth, channel);
+	center_freq_idx = get_oper_centr_freq_seq_idx(chwidth, channel);
 	if (center_freq_idx < 0) {
 		free(token);
 		return -1;
@@ -13292,8 +12948,7 @@ mac80211_he_tx_bandwidth(struct sigma_dut *dut, struct sigma_conn *conn,
 	}
 
 	width = atoi(val);
-	center_freq_idx = get_oper_centr_freq_seq_idx(dut, width,
-						      dut->ap_channel);
+	center_freq_idx = get_oper_centr_freq_seq_idx(width, dut->ap_channel);
 	if (center_freq_idx < 0)
 		return ERROR_SEND_STATUS;
 

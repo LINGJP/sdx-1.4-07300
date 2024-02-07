@@ -1,8 +1,5 @@
 /*
- * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Not a Contribution
- *
- * Copyright (C) 2010 The Android Open Source Project
+ * Copyright (C) 2010, 2021 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,8 +106,10 @@ typedef uint16_t LocGpsLocationFlags;
 #define LOC_GPS_LOCATION_HAS_BEARING_ACCURACY 0x0080
 /** LocGpsLocation has valid spoof mask */
 #define LOC_GPS_LOCATION_HAS_SPOOF_MASK   0x0100
+/** LocGpsLocation has valid Real Time and Real Time Uncertainty */
+#define LOC_GPS_LOCATION_HAS_ELAPSED_REAL_TIME 0x0200
 /** Location has valid source information. */
-#define LOC_GPS_LOCATION_HAS_SOURCE_INFO   0x0200
+#define LOC_GPS_LOCATION_HAS_SOURCE_INFO   0x0400
 
 /** Spoof mask in LocGpsLocation */
 typedef uint32_t LocGpsSpoofMask;

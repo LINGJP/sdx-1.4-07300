@@ -17,7 +17,6 @@ DEFAULT_MIGRATION_COST=500000
 DEFAULT_RT_PERIOD=1000000
 DEFAULT_RT_RUNTIME=950000
 SCHED_CAPACITY_SHIFT=10
-SCHED_CAPACITY_SCALE=1024
 
 cpu_online_bits = 0
 
@@ -128,20 +127,11 @@ def verify_active_cpus(ramdump):
                         mask_bitset_pos(cluster_online_cpus),
                         mask_bitset_pos(cluster_isolated_cpus), crctl_nr_isol))
 
-def dump_rq_lock_information(ramdump):
-    runqueues_addr = ramdump.address_of('runqueues')
-    lock_owner_cpu_offset = ramdump.field_offset('struct rq', 'lock.owner_cpu')
-    if lock_owner_cpu_offset:
-        for i in ramdump.iter_cpus():
-            rq_addr = runqueues_addr + ramdump.per_cpu_offset(i)
-            lock_owner_cpu = ramdump.read_int(rq_addr + lock_owner_cpu_offset)
-            print_out_str("\n cpu {0} ->rq_lock owner cpu {1}".format(i,hex(lock_owner_cpu)))
-        print_out_str("\n ")
-
 def dump_cpufreq_data(ramdump):
     cpufreq_data_addr = ramdump.address_of('cpufreq_cpu_data')
     cpuinfo_off = ramdump.field_offset('struct cpufreq_policy', 'cpuinfo')
     runqueues_addr = ramdump.address_of('runqueues')
+
     print_out_str("\nCPU Frequency information:\n" + "-" * 10)
     for i in ramdump.iter_cpus():
         cpu_data_addr = ramdump.read_u64(cpufreq_data_addr + ramdump.per_cpu_offset(i))
@@ -164,18 +154,13 @@ def dump_cpufreq_data(ramdump):
             thermal_pressure = ramdump.read_u64(ramdump.address_of('thermal_pressure') + ramdump.per_cpu_offset(i))
             thermal_cap = max_thermal_cap - thermal_pressure
         else:
-            try:
-                thermal_cap = ramdump.read_word(ramdump.array_index(ramdump.address_of('thermal_cap_cpu'), 'unsigned long', i))
-            except Exception as err:
-                print(err)
+            thermal_cap = ramdump.read_word(ramdump.array_index(ramdump.address_of('thermal_cap_cpu'), 'unsigned long', i))
+
+        arch_scale = ramdump.read_int(ramdump.address_of('cpu_scale') + ramdump.per_cpu_offset(i))
 
         print_out_str("CPU:{0}\tGovernor:{1}\t cur_freq:{2}, max_freq:{3}, min_freq{4}  cpuinfo: min_freq:{5}, max_freq:{6}"
                     .format(i, gov_name, cur_freq, max_freq, min_freq, cpuinfo_min_freq, cpuinfo_max_freq))
-        try:
-            arch_scale = ramdump.read_int(ramdump.address_of('cpu_scale') + ramdump.per_cpu_offset(i))
-            print_out_str("\tCapacity: capacity_orig:{0}, cur_cap:{1}, arch_scale:{2}\n".format(cap_orig, curr_cap, arch_scale))
-        except Exception as err:
-            print(err)
+        print_out_str("\tCapacity: capacity_orig:{0}, cur_cap:{1}, arch_scale:{2}\n".format(cap_orig, curr_cap, arch_scale))
 
 
 @register_parser('--sched-info', 'Verify scheduler\'s various parameter status')
@@ -190,10 +175,10 @@ class Schedinfo(RamParser):
 
         # verify nr_migrates
         sched_nr_migrate = self.ramdump.read_u32('sysctl_sched_nr_migrate')
-        if sched_nr_migrate is not None and (sched_nr_migrate != DEFAULT_MIGRATION_NR):
+        if (sched_nr_migrate != DEFAULT_MIGRATION_NR):
             print_out_str("*" * 5 + " WARNING:" + "\n")
             print_out_str("\t sysctl_sched_nr_migrate has changed!!\n")
-            print_out_str("\t\t sysctl_sched_nr_migrate Default:{0} and Value in dump:{1}\n".format(DEFAULT_MIGRATION_NR, sched_nr_migrate))
+            print_out_str("\t If it is single digit, scheduler's load balancer has broken in the dump\n")
 
         # verify migration cost
         sched_migration_cost = self.ramdump.read_u32('sysctl_sched_migration_cost')
@@ -223,26 +208,13 @@ class Schedinfo(RamParser):
         rd_offset = self.ramdump.field_offset('struct rq', 'rd')
         sd_offset = self.ramdump.field_offset('struct rq', 'sd')
         def_rd_addr = self.ramdump.address_of('def_root_domain')
-
-        try:
-            for cpu in (mask_bitset_pos(cpu_online_bits)):
-                rq_addr = runqueues_addr + self.ramdump.per_cpu_offset(cpu)
-                rd = self.ramdump.read_word(rq_addr + rd_offset)
-                sd = self.ramdump.read_word(rq_addr + sd_offset)
-                if rd == def_rd_addr :
-                    print_out_str("*" * 5 + " WARNING:" + "\n")
-                    print_out_str("Online cpu:{0} has attached to default sched root domain {1:x}\n".format(cpu, def_rd_addr))
-                if sd == 0 or sd == None:
-                    print_out_str("*" * 5 + " WARNING:" + "\n")
-                    print_out_str("Online cpu:{0} has Null sched_domain!!\n".format(cpu))
-        except Exception as err:
-            print(err)
-
-        # verify uclamp_util_max/min
-        sched_uclamp_util_min = self.ramdump.read_u32('sysctl_sched_uclamp_util_min')
-        sched_uclamp_util_max = self.ramdump.read_u32('sysctl_sched_uclamp_util_max')
-        if sched_uclamp_util_min is not None and ((sched_uclamp_util_min != SCHED_CAPACITY_SCALE) or (sched_uclamp_util_max != SCHED_CAPACITY_SCALE)):
-            print_out_str("*" * 5 + " WARNING:" + "\n")
-            print_out_str("\t\t sysctl_sched_uclamp_util_min Default:{0} and Value in dump:{1}\n".format(SCHED_CAPACITY_SCALE, sched_uclamp_util_min))
-            print_out_str("\t\t sysctl_sched_uclamp_util_max Default:{0} and Value in dump:{1}\n".format(SCHED_CAPACITY_SCALE, sched_uclamp_util_max))
-        dump_rq_lock_information(self.ramdump)
+        for cpu in (mask_bitset_pos(cpu_online_bits)):
+            rq_addr = runqueues_addr + self.ramdump.per_cpu_offset(cpu)
+            rd = self.ramdump.read_word(rq_addr + rd_offset)
+            sd = self.ramdump.read_word(rq_addr + sd_offset)
+            if rd == def_rd_addr :
+                print_out_str("*" * 5 + " WARNING:" + "\n")
+                print_out_str("Online cpu:{0} has attached to default sched root domain {1:x}\n".format(cpu, def_rd_addr))
+            if sd == 0 or sd == None:
+                print_out_str("*" * 5 + " WARNING:" + "\n")
+                print_out_str("Online cpu:{0} has Null sched_domain!!\n".format(cpu))

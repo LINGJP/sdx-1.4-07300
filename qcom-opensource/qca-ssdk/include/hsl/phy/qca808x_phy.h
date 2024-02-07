@@ -49,7 +49,6 @@ extern "C"
 #define QCA808X_PHY_ID2                          3
 #define QCA808X_AUTONEG_ADVERT                   4
 #define QCA808X_LINK_PARTNER_ABILITY             5
-#define QCA808X_AUTONEG_EXPANSION                6
 #define QCA808X_1000BASET_CONTROL                9
 #define QCA808X_1000BASET_STATUS                 10
 #define QCA808X_MMD_CTRL_REG                     13
@@ -75,7 +74,6 @@ extern "C"
 #define QCA808X_DEBUG_PHY_HIBERNATION_CTRL          0xb
 #define QCA808X_DEBUG_PHY_HIBERNATION_STAT          0xc
 #define QCA808X_DEBUG_PHY_POWER_SAVING_CTRL         0x29
-#define QCA808X_PHY_MMD7_LP_AN_ABILITY              0x21
 #define QCA808X_PHY_MMD7_ADDR_8023AZ_EEE_CTRL       0x3c
 #define QCA808X_PHY_MMD7_ADDR_8023AZ_EEE_PARTNER    0x3d
 #define QCA808X_PHY_MMD7_ADDR_8023AZ_EEE_STATUS     0x8000
@@ -113,9 +111,6 @@ extern "C"
 #define QCA808X_PHY_MMD7_NUM  7
 #define QCA808X_PHY_MMD3_NUM  3
 #define QCA808X_PHY_MMD1_NUM  1
-
-#define QCA808X_PHY_MMD7_LP_AN_2500_ABILITY      0x20
-#define QCA808X_PHY_MMD7_LP_AN_5000_ABILITY      0x40
 
 #define QCA808X_PHY_MMD1_FAST_RETRAIN_STATUS_CTL 0x93
 #define QCA808X_PHY_MMD1_MSE_THRESHOLD_20DB      0x8014
@@ -317,10 +312,6 @@ extern "C"
     (((phy_status) &                                  \
         (QCA808X_STATUS_RESOVLED)) ==                 \
         (QCA808X_STATUS_RESOVLED))
-
-/* Auto Negotiation Expansion:6 */
-#define QCA808X_LINK_PARTNER_PAGE_RECEIVED       0x0002
-#define QCA808X_LINK_PARTNER_AUTONEG_ABLE        0x0001
 
   /* Auto-Negotiation Advertisement register. offset:4 */
 #define QCA808X_ADVERTISE_SELECTOR_FIELD         0x0001

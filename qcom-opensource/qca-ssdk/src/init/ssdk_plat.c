@@ -545,54 +545,12 @@ static int miibus_mdm_get(const char *mdio_bus_name, int mdio_bus_id, int mdio_p
 	return 0;
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(5, 0, 0))
-#include <linux/pci.h>
-static int device_match_child_name(struct device *dev, const void *child_name)
-{
-	struct device *miidev = device_find_child_by_name(dev, child_name);
-
-	if(miidev) {
-		miibus = to_mii_bus(miidev);
-		return true;
-	}
-
-	return false;
-}
-
-static int miibus_mdm_get_by_busid(const char *mdio_bus_name, int mdio_bus_id, int mdio_phy_id)
-{
-	char busid[MII_BUS_ID_SIZE];
-
-	snprintf(busid, MII_BUS_ID_SIZE, "%s-%x", mdio_bus_name, mdio_bus_id);
-
-	bus_find_device(&pci_bus_type, NULL, busid, device_match_child_name);
-
-	if (miibus) {
-		printk("mii bus[%s] is ready on MDM\n", busid);
-	} else {
-		printk("cannot get mii bus[%s] on MDM\n", busid);
-		return 1;
-	}
-
-	if (!try_module_get(miibus->owner)) {
-		printk("cannot get mii bus module reference\n");
-		return 1;
-	}
-
-	printk("mdio read phy:%d reg:1=0x%04x\n", mdio_phy_id, mdiobus_read(miibus, mdio_phy_id, 1));
-	return 0;
-}
-#endif
-
 static int miibus_get(a_uint32_t dev_id)
 {
 #ifdef BOARD_MDM_LE
 	if(miibus_mdm_get(MDM_LE_MDIO_BUS_NAME, MDM_LE_MDIO_BUS_ID, MDM_LE_MDIO_PHY_ID)) {
 		if(miibus_mdm_get(MDM_LE_NTN3_MDIO_BUS_NAME, MDM_LE_NTN3_MDIO_BUS_ID, MDM_LE_NTN3_MDIO_PHY_ID)) {
-	#if (LINUX_VERSION_CODE > KERNEL_VERSION(5, 0, 0))
-			if(miibus_mdm_get_by_busid(MDM_LE_NTN3_MDIO_BUS_NAME, MDM_LE_NTN3_MDIO_BUS_ID, MDM_LE_NTN3_MDIO_PHY_ID))
-	#endif
-				return 1;
+			return 1;
 		}
 	}
 

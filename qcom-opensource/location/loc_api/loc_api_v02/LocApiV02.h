@@ -76,7 +76,6 @@ typedef struct
     uint16_t gnssSvId;
     qmiLocMeasFieldsValidMaskT_v02 validMask;
     uint8_t cycleSlipCount;
-    uint8_t nHzMeasurement;
 } adrData;
 
 typedef uint64_t GpsSvMeasHeaderFlags;
@@ -104,11 +103,6 @@ typedef uint64_t GpsSvMeasHeaderFlags;
 #define BIAS_BDSB1_BDSB2A_VALID         0x00100000
 #define BIAS_BDSB1_BDSB2A_UNC_VALID     0x00200000
 
-#define BIAS_GPSL1_GPSL2C_VALID         0x00400000
-#define BIAS_GPSL1_GPSL2C_UNC_VALID     0x00800000
-#define BIAS_GALE1_GALE5B_VALID         0x01000000
-#define BIAS_GALE1_GALE5B_UNC_VALID     0x02000000
-
 typedef struct {
     uint64_t flags;
 
@@ -117,8 +111,6 @@ typedef struct {
     float gpsL1Unc;
     float gpsL1_gpsL5;
     float gpsL1_gpsL5Unc;
-    float gpsL1_gpsL2c;
-    float gpsL1_gpsL2cUnc;
     float gpsL1_gloG1;
     float gpsL1_gloG1Unc;
     float gpsL1_galE1;
@@ -133,9 +125,6 @@ typedef struct {
     float galE1Unc;
     float galE1_galE5a;
     float galE1_galE5aUnc;
-    float galE1_galE5b;
-    float galE1_galE5bUnc;
-
     float bdsB1;
     float bdsB1Unc;
     float bdsB1_bdsB1c;
@@ -170,7 +159,6 @@ private:
   int  mMsInWeek;
   bool mAgcIsPresent;
   timeBiases mTimeBiases;
-  qmiLocPlatformPowerStateEnumT_v02 mPlatformPowerState;
 
   size_t mBatchSize, mDesiredBatchSize;
   size_t mTripBatchSize, mDesiredTripBatchSize;
@@ -179,16 +167,19 @@ private:
   bool mIsFirstStartFixReq;
   uint64_t mHlosQtimer1, mHlosQtimer2;
   uint32_t mRefFCount;
-  std::string mPackageName[eQMI_LOC_R3_V02+1];
 
   // Below two member variables are for elapsedRealTime calculation
   ElapsedRealtimeEstimator mMeasElapsedRealTimeCal;
+  ElapsedRealtimeEstimator mPositionElapsedRealTimeCal;
 
   /* Convert event mask from loc eng to loc_api_v02 format */
-  static locClientEventMaskType convertLocClientEventMask(LOC_API_ADAPTER_EVENT_MASK_T mask);
+  static locClientEventMaskType convertMask(LOC_API_ADAPTER_EVENT_MASK_T mask);
 
   /* Convert GPS LOCK from LocationAPI format to QMI format */
   static qmiLocLockEnumT_v02 convertGpsLockFromAPItoQMI(GnssConfigGpsLock lock);
+
+  /* Convert GPS LOCK from QMI format to LocationAPI format */
+  static GnssConfigGpsLock convertGpsLockFromQMItoAPI(qmiLocLockEnumT_v02 lock);
 
   /* Convert error from loc_api_v02 to loc eng format*/
   static enum loc_api_adapter_err convertErr(locClientStatusEnumType status);
@@ -334,11 +325,12 @@ private:
   void requestOdcpi(
     const qmiLocEventWifiReqIndMsgT_v02& odcpiReq);
 
-  void registerEventMask();
+  void registerEventMask(LOC_API_ADAPTER_EVENT_MASK_T adapterMask);
   bool sendRequestForAidingData(locClientEventMaskType qmiMask);
-  locClientEventMaskType adjustLocClientEventMask(locClientEventMaskType qmiMask);
+  locClientEventMaskType adjustMaskIfNoSessionOrEngineOff(locClientEventMaskType qmiMask);
   bool cacheGnssMeasurementSupport();
   void registerMasterClient();
+  int getGpsLock(uint8_t subType);
   void getRobustLocationConfig(uint32_t sessionId, LocApiResponse* adapterResponse);
   void getMinGpsWeek(uint32_t sessionId, LocApiResponse* adapterResponse);
 
@@ -370,9 +362,6 @@ private:
   void geofenceStatusEvent(const qmiLocEventGeofenceGenAlertIndMsgT_v02* alertInfo);
   void geofenceDwellEvent(const qmiLocEventGeofenceBatchedDwellIndMsgT_v02 *dwellEvent);
   void reportLatencyInfo(const qmiLocLatencyInformationIndMsgT_v02* pLocLatencyInfo);
-
-  void reportPowerStateChangeInfo(
-        const qmiLocPlatformPowerStateChangedIndMsgT_v02 *pPowerStateChangedInfo);
 
 protected:
   virtual enum loc_api_adapter_err

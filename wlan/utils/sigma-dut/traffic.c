@@ -39,7 +39,6 @@ static enum sigma_cmd_result cmd_traffic_send_ping(struct sigma_dut *dut,
 	int type = 1;
 	int dscp = 0, use_dscp = 0;
 	char extra[100], int_arg[100], intf_arg[100], ip_dst[100], ping[100];
-	struct in6_addr ip6_addr;
 
 	val = get_param(cmd, "Type");
 	if (!val)
@@ -59,18 +58,6 @@ static enum sigma_cmd_result cmd_traffic_send_ping(struct sigma_dut *dut,
 	if (dut->ndp_enable && type == 2) {
 		snprintf(ip_dst, sizeof(ip_dst), "%s%%nan0", dst);
 		dst = ip_dst;
-	} else if (type == 2) {
-		if (inet_pton(AF_INET6, dst, &ip6_addr) <= 0) {
-			send_resp(dut, conn, SIGMA_ERROR,
-				  "ErrorCode,Unsupported address type");
-			return STATUS_SENT;
-		}
-
-		if (IN6_IS_ADDR_LINKLOCAL(&ip6_addr)) {
-			snprintf(ip_dst, sizeof(ip_dst), "%s%%%s", dst,
-				 get_station_ifname(dut));
-			dst = ip_dst;
-		}
 	}
 
 	val = get_param(cmd, "frameSize");
@@ -261,7 +248,6 @@ static enum sigma_cmd_result cmd_traffic_stop_ping(struct sigma_dut *dut,
 static int get_ip_addr(const char *ifname, int ipv6, char *buf, size_t len)
 {
 	struct ifaddrs *ifa, *ifa_tmp;
-	bool non_ll_addr_found = false;
 
 	if (getifaddrs(&ifa) == -1)
 		return -1;
@@ -284,22 +270,13 @@ static int get_ip_addr(const char *ifname, int ipv6, char *buf, size_t len)
 			struct sockaddr_in6 *in6;
 
 			in6 = (struct sockaddr_in6 *) ifa_tmp->ifa_addr;
-
-			/* get link local address if available */
-			if (IN6_IS_ADDR_LINKLOCAL(&in6->sin6_addr)) {
-				if (!inet_ntop(AF_INET6, &in6->sin6_addr, buf,
-					       len))
-					return -1;
-				return 0;
-			}
-
-			if (!non_ll_addr_found &&
-			    inet_ntop(AF_INET6, &in6->sin6_addr, buf, len))
-				non_ll_addr_found = true;
+			if (!inet_ntop(AF_INET6, &in6->sin6_addr, buf, len))
+				return -1;
+			return 0;
 		}
 	}
 
-	return non_ll_addr_found ? 0 : -1;
+	return -1;
 }
 
 

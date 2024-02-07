@@ -78,6 +78,7 @@ typedef struct loc_gps_cfg_s
     double         CONSTRAINED_TIME_UNCERTAINTY_THRESHOLD;
     uint32_t       CONSTRAINED_TIME_UNCERTAINTY_ENERGY_BUDGET;
     uint32_t       POSITION_ASSISTED_CLOCK_ESTIMATOR_ENABLED;
+    char           PROXY_APP_PACKAGE_NAME[LOC_MAX_PARAM_STRING];
     uint32_t       CP_MTLR_ES;
     uint32_t       GNSS_DEPLOYMENT;
     uint32_t       CUSTOM_NMEA_GGA_FIX_QUALITY_ENABLED;
@@ -156,7 +157,6 @@ public:
     inline bool hasAgpsExtendedCapabilities() { return mLBSProxy->hasAgpsExtendedCapabilities(); }
     inline bool hasNativeXtraClient() { return mLBSProxy->hasNativeXtraClient(); }
     inline void modemPowerVote(bool power) const { return mLBSProxy->modemPowerVote(power); }
-    inline const LBSProxyBase* getLBSProxyBase() { return mLBSProxy; }
     inline IzatDevId_t getIzatDevId() const {
         return mLBSProxy->getIzatDevId();
     }

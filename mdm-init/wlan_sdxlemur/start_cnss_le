@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (c) 2019, 2021, The Linux Foundation. All rights reserved.
+# Copyright (c) 2019, The Linux Foundation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -38,9 +38,7 @@ case "$1" in
 
         if [ -f $MODULE_BASE/kernel/drivers/net/wireless/cnss2/cnss2.ko ];
         then
-                echo "Load cnss platform drivers " > /dev/kmsg
-                insmod $MODULE_BASE/kernel/drivers/net/wireless/cnss_utils/wlan_firmware_service_v01.ko
-                insmod $MODULE_BASE/kernel/drivers/net/wireless/cnss_utils/device_management_service_v01.ko
+                echo "Load cnss platform driver " > /dev/kmsg
                 insmod $MODULE_BASE/kernel/drivers/net/wireless/cnss2/cnss2.ko
         else
                 echo "cnss module does not exist "

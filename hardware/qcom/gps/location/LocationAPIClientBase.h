@@ -130,7 +130,7 @@ public:
     void locAPIDisable();
     uint32_t locAPIGnssUpdateConfig(GnssConfig config);
     uint32_t locAPIGnssGetConfig(GnssConfigFlagsMask config);
-    inline ILocationControlAPI* getControlAPI() { return mLocationControlAPI; }
+    inline LocationControlAPI* getControlAPI() { return mLocationControlAPI; }
 
     // callbacks
     void onCtrlResponseCb(LocationError error, uint32_t id);
@@ -191,7 +191,7 @@ public:
 
 private:
     pthread_mutex_t mMutex;
-    ILocationControlAPI* mLocationControlAPI;
+    LocationControlAPI* mLocationControlAPI;
     RequestQueue mRequestQueues[CTRL_REQUEST_MAX];
     bool mEnabled;
     GnssConfig mConfig;
@@ -581,7 +581,7 @@ private:
     geofenceBreachCallback mGeofenceBreachCallback;
     batchingStatusCallback mBatchingStatusCallback;
 
-    ILocationAPI* mLocationAPI;
+    LocationAPI* mLocationAPI;
 
     RequestQueue mRequestQueues[REQUEST_MAX];
     BiDict<GeofenceBreachTypeMask> mGeofenceBiDict;

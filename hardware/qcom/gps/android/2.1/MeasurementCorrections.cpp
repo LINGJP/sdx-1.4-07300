@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -65,11 +65,11 @@ void MeasurementCorrections::GnssMeasurementCorrectionsDeathRecipient::serviceDi
         return;
     }
     if (nullptr == spMeasurementCorrections->mGnss ||
-        nullptr == spMeasurementCorrections->mGnss->getLocationControlApi()) {
+        nullptr == spMeasurementCorrections->mGnss->getGnssInterface()) {
         LOC_LOGe("Null GNSS interface");
         return;
     }
-    spMeasurementCorrections->mGnss->getLocationControlApi()->measCorrClose();
+    spMeasurementCorrections->mGnss->getGnssInterface()->measCorrClose();
 }
 
 MeasurementCorrections::MeasurementCorrections(Gnss* gnss) : mGnss(gnss) {
@@ -91,10 +91,7 @@ void MeasurementCorrections::measCorrSetCapabilitiesCb(
 void MeasurementCorrections::setCapabilitiesCb(
     GnssMeasurementCorrectionsCapabilitiesMask capabilities) {
 
-    std::unique_lock<std::mutex> lock(mMutex);
-    auto measCorrCbIface(mMeasurementCorrectionsCbIface);
-    lock.unlock();
-    if (measCorrCbIface != nullptr) {
+    if (mMeasurementCorrectionsCbIface != nullptr) {
         uint32_t measCorrCapabilities = 0;
 
         // Convert from one enum to another
@@ -111,7 +108,7 @@ void MeasurementCorrections::setCapabilitiesCb(
                     IMeasurementCorrectionsCallback::Capabilities::REFLECTING_PLANE;
         }
 
-        auto r = measCorrCbIface->setCapabilitiesCb(measCorrCapabilities);
+        auto r = mMeasurementCorrectionsCbIface->setCapabilitiesCb(measCorrCapabilities);
         if (!r.isOk()) {
             LOC_LOGw("Error invoking setCapabilitiesCb %s", r.description().c_str());
         }
@@ -127,7 +124,7 @@ Return<bool> MeasurementCorrections::setCorrections(
 
     V2_1::implementation::convertMeasurementCorrections(corrections, gnssMeasurementCorrections);
 
-    return mGnss->getLocationControlApi()->measCorrSetCorrections(gnssMeasurementCorrections);
+    return mGnss->getGnssInterface()->measCorrSetCorrections(gnssMeasurementCorrections);
 }
 
 Return<bool> MeasurementCorrections::setCorrections_1_1(
@@ -179,30 +176,19 @@ Return<bool> MeasurementCorrections::setCorrections_1_1(
         gnssMeasurementCorrections.satCorrections.push_back(gnssSingleSatCorrection);
     }
 
-    return mGnss->getLocationControlApi()->measCorrSetCorrections(gnssMeasurementCorrections);
+    return mGnss->getGnssInterface()->measCorrSetCorrections(gnssMeasurementCorrections);
 }
 
 Return<bool> MeasurementCorrections::setCallback(
         const sp<V1_0::IMeasurementCorrectionsCallback>& callback) {
 
-    if (nullptr == mGnss || nullptr == mGnss->getLocationControlApi()) {
+    if (nullptr == mGnss || nullptr == mGnss->getGnssInterface()) {
         LOC_LOGe("Null GNSS interface");
         return false;
     }
-    std::unique_lock<std::mutex> lock(mMutex);
     mMeasurementCorrectionsCbIface = callback;
-    lock.unlock();
 
-    LocationControlCallbacks locCtrlCbs;
-    memset(&locCtrlCbs, 0, sizeof(locCtrlCbs));
-    locCtrlCbs.size = sizeof(LocationControlCallbacks);
-
-    locCtrlCbs.measCorrSetCapabilitiesCb =
-            [this] (GnssMeasurementCorrectionsCapabilitiesMask capabilities) {
-            measCorrSetCapabilitiesCb(capabilities);
-    };
-    mGnss->getLocationControlApi()->updateCallbacks(locCtrlCbs);
-    return true;
+    return mGnss->getGnssInterface()->measCorrInit(measCorrSetCapabilitiesCb);
 }
 
 }  // namespace implementation

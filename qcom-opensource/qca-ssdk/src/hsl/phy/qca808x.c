@@ -23,7 +23,7 @@
 #include <linux/etherdevice.h>
 
 #define PHY_INVALID_DATA            0xffff
-#define QCA808X_INTR_INIT           0xcc01
+#define QCA808X_INTR_INIT           0xec01
 
 #define QCA808X_PHY_LINK_UP         1
 #define QCA808X_PHY_LINK_DOWN       0
@@ -186,7 +186,6 @@ static void qca808x_get_wol(struct phy_device *phydev, struct ethtool_wolinfo *w
 	qca808x_priv *priv = phydev->priv;
 	const struct qca808x_phy_info *pdata = priv->phy_info;
 	a_bool_t enable;
-	fal_mac_addr_t mac = {0};
 
 	if (!pdata) {
 		return;
@@ -194,10 +193,6 @@ static void qca808x_get_wol(struct phy_device *phydev, struct ethtool_wolinfo *w
 
 	qca808x_phy_get_wol_status(pdata->dev_id, pdata->phy_addr, &enable);
 	wol->wolopts = enable ? WAKE_PHY : 0;
-
-	qca808x_phy_get_magic_frame_mac(pdata->dev_id, pdata->phy_addr, &mac);
-	wol->wolopts |= !is_zero_ether_addr(mac.uc) ? WAKE_MAGIC : 0;
-
 	wol->supported = WAKE_MAGIC | WAKE_PHY;
 }
 
@@ -207,7 +202,6 @@ static int qca808x_set_wol(struct phy_device *phydev, struct ethtool_wolinfo *wo
 	const struct qca808x_phy_info *pdata = priv->phy_info;
 	struct net_device *dev = phydev->attached_dev;
 	a_bool_t enable;
-	fal_mac_addr_t zero_mac = {0};
 	int err = 0;
 
 	if (!dev)
@@ -220,8 +214,6 @@ static int qca808x_set_wol(struct phy_device *phydev, struct ethtool_wolinfo *wo
 
 	if (wol->wolopts & WAKE_MAGIC)
 		err = qca808x_dev_addr_init(pdata->dev_id, pdata->phy_addr, dev);
-	else
-		err = qca808x_phy_set_magic_frame_mac(pdata->dev_id, pdata->phy_addr, &zero_mac);
 
 	return err;
 }
@@ -429,7 +421,6 @@ static int qca808x_read_status(struct phy_device *phydev)
 	a_uint32_t dev_id = 0, phy_id = 0;
 	qca808x_priv *priv = phydev->priv;
 	const struct qca808x_phy_info *pdata = priv->phy_info;
-	a_uint16_t phy_data;
 
 	if (!pdata) {
 		return SW_FAIL;
@@ -463,53 +454,9 @@ static int qca808x_read_status(struct phy_device *phydev)
 
 	if (phy_status.duplex == FAL_FULL_DUPLEX) {
 		phydev->duplex = DUPLEX_FULL;
-
-		phy_data = qca808x_phy_reg_read(dev_id, phy_id, QCA808X_LINK_PARTNER_ABILITY);
-		phydev->pause = phy_data & LPA_PAUSE_CAP ? 1 : 0;
-		phydev->asym_pause = phy_data & LPA_PAUSE_ASYM ? 1 : 0;
 	} else {
 		phydev->duplex = DUPLEX_HALF;
 	}
-
-	linkmode_zero(phydev->lp_advertising);
-
-	phy_data = qca808x_phy_reg_read(dev_id, phy_id, QCA808X_PHY_STATUS);
-	if (!(phy_data & QCA808X_STATUS_AUTO_NEG_DONE)) {
-		return 0;
-	}
-
-	phy_data = qca808x_phy_reg_read(dev_id, phy_id, QCA808X_LINK_PARTNER_ABILITY);
-
-	linkmode_mod_bit(ETHTOOL_LINK_MODE_10baseT_Half_BIT,
-			phydev->lp_advertising, phy_data & QCA808X_LINK_10BASETX_HALF_DUPLEX);
-	linkmode_mod_bit(ETHTOOL_LINK_MODE_10baseT_Full_BIT,
-			phydev->lp_advertising, phy_data & QCA808X_LINK_10BASETX_FULL_DUPLEX);
-	linkmode_mod_bit(ETHTOOL_LINK_MODE_100baseT_Half_BIT,
-			phydev->lp_advertising, phy_data & QCA808X_LINK_100BASETX_HALF_DUPLEX);
-	linkmode_mod_bit(ETHTOOL_LINK_MODE_100baseT_Full_BIT,
-			phydev->lp_advertising, phy_data & QCA808X_LINK_100BASETX_FULL_DUPLEX);
-	linkmode_mod_bit(ETHTOOL_LINK_MODE_Pause_BIT,
-			phydev->lp_advertising, phy_data & QCA808X_LINK_PAUSE);
-	linkmode_mod_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT,
-			phydev->lp_advertising, phy_data & QCA808X_LINK_ASYPAUSE);
-
-	phy_data = qca808x_phy_reg_read(dev_id, phy_id, QCA808X_AUTONEG_EXPANSION);
-	linkmode_mod_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, phydev->lp_advertising,
-			phy_data & QCA808X_LINK_PARTNER_AUTONEG_ABLE);
-	if (!(phy_data & QCA808X_LINK_PARTNER_PAGE_RECEIVED)) {
-		phy_data = qca808x_phy_reg_read(dev_id, phy_id, QCA808X_1000BASET_STATUS);
-		linkmode_mod_bit(ETHTOOL_LINK_MODE_1000baseT_Half_BIT,
-			phydev->lp_advertising, phy_data & QCA808X_LINK_1000BASETX_HALF_DUPLEX);
-		linkmode_mod_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT,
-			phydev->lp_advertising, phy_data & QCA808X_LINK_1000BASETX_FULL_DUPLEX);
-	}
-
-	phy_data = qca808x_phy_mmd_read(dev_id, phy_id, QCA808X_PHY_MMD7_NUM,
-					QCA808X_PHY_MMD7_LP_AN_ABILITY);
-	linkmode_mod_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
-			phydev->lp_advertising, phy_data & QCA808X_PHY_MMD7_LP_AN_2500_ABILITY);
-	linkmode_mod_bit(ETHTOOL_LINK_MODE_5000baseT_Full_BIT,
-			phydev->lp_advertising, phy_data & QCA808X_PHY_MMD7_LP_AN_5000_ABILITY);
 
 	return 0;
 }
@@ -519,7 +466,6 @@ static int qca808x_suspend(struct phy_device *phydev)
 	a_uint32_t dev_id = 0, phy_id = 0;
 	qca808x_priv *priv = phydev->priv;
 	const struct qca808x_phy_info *pdata = priv->phy_info;
-	a_bool_t enable;
 
 	if (!pdata) {
 		return SW_FAIL;
@@ -528,15 +474,12 @@ static int qca808x_suspend(struct phy_device *phydev)
 	dev_id = pdata->dev_id;
 	phy_id = pdata->phy_addr;
 
-	qca808x_phy_get_wol_status(dev_id, phy_id, &enable);
-
-	return enable? 0:qca808x_phy_poweroff(dev_id, phy_id);
+	return qca808x_phy_poweroff(dev_id, phy_id);
 }
 
 static int qca808x_resume(struct phy_device *phydev)
 {
 	a_uint32_t dev_id = 0, phy_id = 0;
-	a_uint16_t phy_data;
 	qca808x_priv *priv = phydev->priv;
 	const struct qca808x_phy_info *pdata = priv->phy_info;
 
@@ -547,9 +490,7 @@ static int qca808x_resume(struct phy_device *phydev)
 	dev_id = pdata->dev_id;
 	phy_id = pdata->phy_addr;
 
-	phy_data = qca808x_phy_reg_read(dev_id, phy_id, QCA808X_PHY_CONTROL);
-
-	return (phy_data & QCA808X_CTRL_POWER_DOWN)? qca808x_phy_poweron(dev_id, phy_id):0;
+	return qca808x_phy_poweron(dev_id, phy_id);
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,0))
@@ -728,11 +669,3 @@ void qca808x_phydev_deinit(a_uint32_t dev_id, a_uint32_t port_id)
 		kfree(pdata);
 	}
 }
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(5, 0, 0))
-static struct mdio_device_id __maybe_unused qca808x_tbl[] = {
-    { PHY_ID_MATCH_MODEL(QCA8081_PHY_V1_1) },
-    { }
-};
-MODULE_DEVICE_TABLE(mdio, qca808x_tbl);
-#endif

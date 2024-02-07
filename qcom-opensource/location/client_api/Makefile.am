@@ -12,7 +12,7 @@ AM_CPPFLAGS = -std=c++11
 requiredlibs = \
     $(GPSUTILS_LIBS) \
     $(LOCAPIMSGPROTO_LIBS) \
-    -lprotobuf-lite
+    -lprotobuf
 
 h_sources = \
     src/LocationClientApiImpl.h \

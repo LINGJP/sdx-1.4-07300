@@ -47,45 +47,26 @@ using android::OK;
 
 typedef int vendorEnhancedServiceMain(int /* argc */, char* /* argv */ []);
 
-#define GNSS_AUTO_POWER_LIBNAME  "libgnssauto_power.so"
-#define GNSS_WEAR_POWER_LIBNAME  "libgnsswear_power.so"
+#define GNSS_POWER_LIBNAME  "/vendor/lib64/libgnssauto_power.so"
 
-typedef const void* (*gnssPowerHandler)(void);
-
-int initializeGnssAutoPowerHandler() {
-
-    void * handle = nullptr;
-    gnssPowerHandler getter = (gnssPowerHandler) dlGetSymFromLib(handle, GNSS_AUTO_POWER_LIBNAME,
-                                                                 "initGnssAutoPowerHandler");
-    if (nullptr != getter) {
-        getter();
-        ALOGI("GnssAutoPowerHandler Initialized!");
-        return 0;
-    }
-    return -1;
-}
-
-int initializeGnssWearPowerHandler() {
-
-    void * handle = nullptr;
-    gnssPowerHandler getter = (gnssPowerHandler) dlGetSymFromLib(handle, GNSS_WEAR_POWER_LIBNAME,
-                                                                 "initGnssWearPowerHandler");
-    if (nullptr != getter) {
-        getter();
-        ALOGI("GnssWearPowerHandler Initialized!");
-        return 0;
-    }
-    return -1;
-}
+typedef const void* (*gnssAutoPowerHandler)(void);
 
 void initializeGnssPowerHandler() {
 
-    if (0 != initializeGnssAutoPowerHandler()) {
-        ALOGW("Gnss Auto Power Handler unavailable.");
+    void * handle = nullptr;
+    const char* error = nullptr;
+    gnssAutoPowerHandler getter = nullptr;
 
-        if (0 != initializeGnssWearPowerHandler()) {
-            ALOGW("Gnss Wear Power Handler unavailable.");
-        }
+    getter = (gnssAutoPowerHandler) dlGetSymFromLib(handle, GNSS_POWER_LIBNAME,
+                                                    "initGnssAutoPowerHandler");
+
+    if (nullptr == getter) {
+        /*may not be real problem for non-automotive products*/
+        ALOGW("dlGetSymFromLib for getGnssAutoPowerHandler failed - may not be real problem.");
+    } else {
+        /*Initialize GnssAutoPowerHandler if available*/
+        getter();
+        ALOGI("GnssAutoPowerHandler Initialized!");
     }
 }
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python2
 
 # Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
 #
@@ -182,7 +182,6 @@ if __name__ == '__main__':
         default_list.append("Slabinfo")
         default_list.append("RunQueues")
         default_list.append("PStore")
-        default_list.append("Kconfig")
 
     if options.outdir:
         if not os.path.exists(options.outdir):
@@ -384,12 +383,9 @@ if __name__ == '__main__':
             sys.exit(1)
 
     if options.minidump:
-        try:
-            if not dump.print_socinfo_minidump():
-                print_out_str('!!! No serial number information '
-                              'available for this minidump.')
-        except Exception as err:
-            print_out_str('Unable to extract serial number information')
+        if not dump.print_socinfo_minidump():
+            print_out_str('!!! No serial number information '
+                          'available for this minidump.')
     else:
         if not dump.print_socinfo():
             print_out_str('!!! No serial number information available.')
@@ -428,14 +424,13 @@ if __name__ == '__main__':
             sys.stderr.write("\n")
         if options.minidump:
             if p.cls.__name__ not in default_list:
-                print("    [%d/%d] %s ... not supported in minidump \n" %
+                sys.stderr.write("    [%d/%d] %s ... not supported in minidump \n" %
                                  (i + 1, len(parsers_to_run), p.longopt))
                 continue
 
 
-
-        print("    [%d/%d] %s ... " %
-                         (i + 1, len(parsers_to_run), p.longopt), end='')
+        sys.stderr.write("    [%d/%d] %s ... " %
+                         (i + 1, len(parsers_to_run), p.longopt))
         before = time.time()
         with print_out_section(p.cls.__name__):
             try:
@@ -451,10 +446,11 @@ if __name__ == '__main__':
                 if not options.debug:
                     print_out_str('!!! Exception while running {0}'.format(p.cls.__name__))
                     print_out_exception()
-                    print("FAILED! ")
+                    sys.stderr.write("FAILED! ")
                 else:
                     raise
-        print("%fs" % (time.time() - before))
+        sys.stderr.write("%fs\n" % (time.time() - before))
+        sys.stderr.flush()
         flush_outfile()
 
     sys.stderr.write("\n")

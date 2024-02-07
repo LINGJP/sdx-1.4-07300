@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  * Not a Contribution
  */
 /*
@@ -86,7 +86,7 @@ void Gnss::GnssDeathRecipient::serviceDied(uint64_t cookie, const wp<IBase>& who
     LOC_LOGE("%s] service died. cookie: %llu, who: %p",
             __FUNCTION__, static_cast<unsigned long long>(cookie), &who);
     if (mGnss != nullptr) {
-        mGnss->mLocationControlApi->resetNetworkInfo();
+        mGnss->getGnssInterface()->resetNetworkInfo();
         mGnss->cleanup();
     }
 }
@@ -94,13 +94,14 @@ void Gnss::GnssDeathRecipient::serviceDied(uint64_t cookie, const wp<IBase>& who
 void location_on_battery_status_changed(bool charging) {
     LOC_LOGd("battery status changed to %s charging", charging ? "" : "not");
     if (sGnss != nullptr) {
-        sGnss->getLocationControlApi()->updateBatteryStatus(charging);
+        sGnss->getGnssInterface()->updateBatteryStatus(charging);
     }
 }
 Gnss::Gnss() {
     ENTRY_LOG_CALLFLOW();
     sGnss = this;
-
+    // initilize gnss interface at first in case needing notify battery status
+    sGnss->getGnssInterface()->initialize();
     // register health client to listen on battery change
     loc_extn_battery_properties_listener_init(location_on_battery_status_changed);
     // clear pending GnssConfig
@@ -148,22 +149,19 @@ GnssAPIClient* Gnss::getApi() {
     return mApi;
 }
 
-ILocationControlAPI* Gnss::getLocationControlApi() {
-    if (mLocationControlApi == nullptr) {
-
-        LocationControlCallbacks locCtrlCbs;
-        memset(&locCtrlCbs, 0, sizeof(locCtrlCbs));
-        locCtrlCbs.size = sizeof(LocationControlCallbacks);
-
-        locCtrlCbs.odcpiReqCb =
-                [this](const OdcpiRequestInfo& odcpiRequest) {
-            odcpiRequestCb(odcpiRequest);
-        };
-
-        mLocationControlApi = LocationControlAPI::getInstance(locCtrlCbs);
+const GnssInterface* Gnss::getGnssInterface() {
+    static bool getGnssInterfaceFailed = false;
+    if (mGnssInterface == nullptr && !getGnssInterfaceFailed) {
+        void * libHandle = nullptr;
+        getLocationInterface* getter = (getLocationInterface*)
+                dlGetSymFromLib(libHandle, "libgnss.so", "getGnssInterface");
+        if (NULL == getter) {
+            getGnssInterfaceFailed = true;
+        } else {
+            mGnssInterface = (GnssInterface*)(*getter)();
+        }
     }
-
-    return mLocationControlApi;
+    return mGnssInterface;
 }
 
 Return<bool> Gnss::setCallback(const sp<V1_0::IGnssCallback>& callback)  {
@@ -320,12 +318,13 @@ Return<bool> Gnss::injectLocation(double latitudeDegrees,
                                   double longitudeDegrees,
                                   float accuracyMeters)  {
     ENTRY_LOG_CALLFLOW();
-    ILocationControlAPI* pCtrlApi = getLocationControlApi();
-    if (pCtrlApi != nullptr) {
-        pCtrlApi->injectLocation(latitudeDegrees, longitudeDegrees, accuracyMeters);
+    const GnssInterface* gnssInterface = getGnssInterface();
+    if (nullptr != gnssInterface) {
+        gnssInterface->injectLocation(latitudeDegrees, longitudeDegrees, accuracyMeters);
         return true;
+    } else {
+        return false;
     }
-    return false;
 }
 
 Return<bool> Gnss::injectTime(int64_t timeMs, int64_t timeReferenceMs,
@@ -455,6 +454,14 @@ Return<bool> Gnss::setCallback_1_1(const sp<V1_1::IGnssCallback>& callback) {
         mGnssCbIface_1_1->linkToDeath(mGnssDeathRecipient, 0 /*cookie*/);
     }
 
+    const GnssInterface* gnssInterface = getGnssInterface();
+    if (nullptr != gnssInterface) {
+        OdcpiRequestCallback cb = [this](const OdcpiRequestInfo& odcpiRequest) {
+            odcpiRequestCb(odcpiRequest);
+        };
+        gnssInterface->odcpiInit(cb, OdcpiPrioritytype::ODCPI_HANDLER_PRIORITY_LOW);
+    }
+
     GnssAPIClient* api = getApi();
     if (api != nullptr) {
         api->gnssUpdateCallbacks(mGnssCbIface_1_1, mGnssNiCbIface);
@@ -503,12 +510,12 @@ Return<sp<V1_1::IGnssConfiguration>> Gnss::getExtensionGnssConfiguration_1_1() {
 
 Return<bool> Gnss::injectBestLocation(const GnssLocation& gnssLocation) {
     ENTRY_LOG_CALLFLOW();
-    ILocationControlAPI* pCtrlApi = getLocationControlApi();
-    if (nullptr != pCtrlApi) {
+    const GnssInterface* gnssInterface = getGnssInterface();
+    if (nullptr != gnssInterface) {
         Location location = {};
         convertGnssLocation(gnssLocation, location);
         location.techMask |= LOCATION_TECHNOLOGY_HYBRID_BIT;
-        pCtrlApi->odcpiInject(location);
+        gnssInterface->odcpiInject(location);
     }
     return true;
 }
@@ -599,6 +606,14 @@ Return<bool> Gnss::setCallback_2_0(const sp<V2_0::IGnssCallback>& callback) {
         mGnssCbIface_2_0->linkToDeath(mGnssDeathRecipient, 0 /*cookie*/);
     }
 
+    const GnssInterface* gnssInterface = getGnssInterface();
+    if (nullptr != gnssInterface) {
+        OdcpiRequestCallback cb = [this](const OdcpiRequestInfo& odcpiRequest) {
+            odcpiRequestCb(odcpiRequest);
+        };
+        gnssInterface->odcpiInit(cb, OdcpiPrioritytype::ODCPI_HANDLER_PRIORITY_LOW);
+    }
+
     GnssAPIClient* api = getApi();
     if (api != nullptr) {
         api->gnssUpdateCallbacks_2_0(mGnssCbIface_2_0);
@@ -671,12 +686,12 @@ Return<sp<::android::hardware::gnss::visibility_control::V1_0::IGnssVisibilityCo
 
 Return<bool> Gnss::injectBestLocation_2_0(const V2_0::GnssLocation& gnssLocation) {
     ENTRY_LOG_CALLFLOW();
-    ILocationControlAPI* pCtrlApi = getLocationControlApi();
-    if (nullptr != pCtrlApi) {
+    const GnssInterface* gnssInterface = getGnssInterface();
+    if (nullptr != gnssInterface) {
         Location location = {};
         convertGnssLocation(gnssLocation, location);
         location.techMask |= LOCATION_TECHNOLOGY_HYBRID_BIT;
-        pCtrlApi->odcpiInject(location);
+        gnssInterface->odcpiInject(location);
     }
     return true;
 }
@@ -730,12 +745,21 @@ Return<bool> Gnss::setCallback_2_1(const sp<V2_1::IGnssCallback>& callback) {
         mGnssCbIface_2_1->linkToDeath(mGnssDeathRecipient, 0 /*cookie*/);
     }
 
+    const GnssInterface* gnssInterface = getGnssInterface();
+    if (gnssInterface != nullptr) {
+        OdcpiRequestCallback cb = [this](const OdcpiRequestInfo& odcpiRequest) {
+            odcpiRequestCb(odcpiRequest);
+        };
+        gnssInterface->odcpiInit(cb, OdcpiPrioritytype::ODCPI_HANDLER_PRIORITY_LOW);
+    }
+
     GnssAPIClient* api = getApi();
     if (api != nullptr) {
         api->gnssUpdateCallbacks_2_1(mGnssCbIface_2_1);
         api->gnssEnable(LOCATION_TECHNOLOGY_TYPE_GNSS);
         api->requestCapabilities();
     }
+
     return true;
 }
 Return<sp<V2_1::IGnssMeasurement>> Gnss::getExtensionGnssMeasurement_2_1() {

@@ -390,10 +390,6 @@ case "$1" in
 		echo 1 > /sys/kernel/debug/tracing/events/timer/hrtimer_init/enable
 		echo 1 > /sys/kernel/debug/tracing/events/timer/hrtimer_start/enable
 
-        echo 1 > /sys/kernel/debug/tracing/events/clk/enable
-        echo 1 > /sys/kernel/debug/tracing/events/regulator/enable
-        echo 1 > /sys/kernel/debug/tracing/events/rpmh/enable
-
 		echo 1 > /sys/kernel/debug/tracing/tracing_on
 		echo "++++ $0 -> ENABLE-FTRACE END" > /dev/kmsg
 
@@ -417,26 +413,8 @@ case "$1" in
 		echo 0xb201024 1 > $DCC_PATH/config #RPMH_PDC_APPS_SEQ_DBG_PROGRAM_COUNTER_DRV0
 		echo 0xb204524 1 > $DCC_PATH/config #RPMH_PDC_APPS_SEQ_OVERRIDE_START_ADDR
 
-        echo 0xC201244 1 > $DCC_PATH/config
-        echo 0xC202244 1 > $DCC_PATH/config
-        echo 0xC20100C 0x9 > $DCC_PATH/config
-        echo 0xC20200C 0x9 > $DCC_PATH/config
-
-        echo 0x10B004 1 > $DCC_PATH/config
-        echo 0x123004 1 > $DCC_PATH/config
-        echo 0x137004 1 > $DCC_PATH/config
-        echo 0x13D004 1 > $DCC_PATH/config
-
-        echo 0x1781002C 0x1480 > $DCC_PATH/config_write
-        echo 0x17830408 1 > $DCC_PATH/config #APCS_RSCC_RSC_SEQ_PROGRAM_COUNTER_DRV0
-        echo 0x17808004 1 > $DCC_PATH/config
-        echo 0x17808020 1 > $DCC_PATH/config
-        echo 0x1781002C 0x900 > $DCC_PATH/config_write
-
-        echo 0x17808100 0x9 > $DCC_PATH/config
-
-        echo 1 > $DCC_PATH/enable
-        echo "++++ $0 -> ENABLE-DCC END" > /dev/kmsg
+		echo 1 > $DCC_PATH/enable
+		echo "++++ $0 -> ENABLE-DCC END" > /dev/kmsg
                 echo "done";
                 ;;
          esac

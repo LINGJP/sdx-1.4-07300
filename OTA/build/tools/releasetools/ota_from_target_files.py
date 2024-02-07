@@ -617,7 +617,6 @@ def WriteFullOTAPackage(input_zip, output_zip):
 
   oem_props = OPTIONS.info_dict.get("oem_fingerprint_properties")
   recovery_mount_options = OPTIONS.info_dict.get("recovery_mount_options")
-  dm_verity_nand = OPTIONS.info_dict.get("dm_verity_nand", "0") == "1"
   oem_dict = None
   if oem_props is not None and len(oem_props) > 0:
     if OPTIONS.oem_source is None:
@@ -720,7 +719,7 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
 
   # Place a copy of file_contexts.bin into the OTA package which will be used
   # by the recovery program.
-  if "selinux_fc" in OPTIONS.info_dict and not dm_verity_nand:
+  if "selinux_fc" in OPTIONS.info_dict:
     WritePolicyConfig(OPTIONS.info_dict["selinux_fc"], output_zip)
 
   recovery_mount_options = OPTIONS.info_dict.get("recovery_mount_options")
@@ -770,53 +769,53 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
         system_diff.WriteScript(script, output_zip)
 
   else:
-    if not dm_verity_nand:
-      script.FormatPartition(OPTIONS.system_mount_path)
-      script.Mount(OPTIONS.system_mount_path, recovery_mount_options)
-      if not has_recovery_patch:
-        script.UnpackPackageDir("recovery", OPTIONS.system_mount_path)
-      script.UnpackPackageDir("system", OPTIONS.system_mount_path)
-      # For file-based Full-OTA, /dev is formatted and then regular files are
-      # populated in the same. But LE targets may use 'makedevs' utility to
-      # populate /dev at compile-time. So OTA-upgrade should also populate the
-      # appropriate special files in /dev rather than regular ones.
-      # Generate the commands in updater-script to run 'makedevs' using the device_table
-      # that is packed in META/.
-      device_table_path = os.path.join(OPTIONS.input_tmp, "META", "device_table.txt")
-      if os.path.exists(device_table_path):
-        delete_recursive = 'delete_recursive("'
-        mkdir = 'run_program("/bin/mkdir", "'
-        delete_recursive += OPTIONS.system_mount_path
-        mkdir += OPTIONS.system_mount_path
-        if OPTIONS.system_mount_path.endswith('/'):
-          delete_recursive += 'dev");'
-          mkdir += 'dev");'
-        else:
-          delete_recursive += '/dev");'
-          mkdir += '/dev");'
+    script.FormatPartition(OPTIONS.system_mount_path)
+    script.Mount(OPTIONS.system_mount_path, recovery_mount_options)
+    if not has_recovery_patch:
+      script.UnpackPackageDir("recovery", OPTIONS.system_mount_path)
+    script.UnpackPackageDir("system", OPTIONS.system_mount_path)
 
-        # delete everything in /dev and create /dev
-        script.AppendExtra(delete_recursive)
-        script.AppendExtra(mkdir)
-        # pack the device_table into update package
-        device_table_data = input_zip.read("META/device_table.txt");
-        common.ZipWriteStr(output_zip, "device_table.txt", device_table_data)
-        # extract the packed device_table to /tmp
-        script.AppendExtra('package_extract_file("device_table.txt",'
-                           '"/tmp/device_table.txt");')
-        # run 'makedevs' using the device_table, with rootdir as '/'
-        makedevs = 'run_program("/sbin/makedevs", "-d","/tmp/device_table.txt", "'
-        makedevs += OPTIONS.system_mount_path
-        makedevs += '");'
-        script.AppendExtra(makedevs)
+    # For file-based Full-OTA, /dev is formatted and then regular files are
+    # populated in the same. But LE targets may use 'makedevs' utility to
+    # populate /dev at compile-time. So OTA-upgrade should also populate the
+    # appropriate special files in /dev rather than regular ones.
+    # Generate the commands in updater-script to run 'makedevs' using the device_table
+    # that is packed in META/.
+    device_table_path = os.path.join(OPTIONS.input_tmp, "META", "device_table.txt")
+    if os.path.exists(device_table_path):
+      delete_recursive = 'delete_recursive("'
+      mkdir = 'run_program("/bin/mkdir", "'
+      delete_recursive += OPTIONS.system_mount_path
+      mkdir += OPTIONS.system_mount_path
+      if OPTIONS.system_mount_path.endswith('/'):
+        delete_recursive += 'dev");'
+        mkdir += 'dev");'
+      else:
+        delete_recursive += '/dev");'
+        mkdir += '/dev");'
 
-      symlinks = CopyPartitionFiles(system_items, input_zip, output_zip)
-      script.MakeSymlinks(symlinks)
+      # delete everything in /dev and create /dev
+      script.AppendExtra(delete_recursive)
+      script.AppendExtra(mkdir)
+      # pack the device_table into update package
+      device_table_data = input_zip.read("META/device_table.txt");
+      common.ZipWriteStr(output_zip, "device_table.txt", device_table_data)
+      # extract the packed device_table to /tmp
+      script.AppendExtra('package_extract_file("device_table.txt",'
+                         '"/tmp/device_table.txt");')
+      # run 'makedevs' using the device_table, with rootdir as '/'
+      makedevs = 'run_program("/sbin/makedevs", "-d","/tmp/device_table.txt", "'
+      makedevs += OPTIONS.system_mount_path
+      makedevs += '");'
+      script.AppendExtra(makedevs)
+
+    symlinks = CopyPartitionFiles(system_items, input_zip, output_zip)
+    script.MakeSymlinks(symlinks)
 
   boot_img = common.GetBootableImage(
       "boot.img", "boot.img", OPTIONS.input_tmp, "BOOT")
 
-  if not block_based and not dm_verity_nand:
+  if not block_based:
     def output_sink(fn, data):
       common.ZipWriteStr(output_zip, "recovery/" + fn, data)
       system_items.Get("system/" + fn)
@@ -856,18 +855,10 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   else:
     script.WriteRawImage("/boot", "boot.img")
 
-  if dm_verity_nand:
-    system_img = common.GetBootableImage(
-        "system.img", "system.img", OPTIONS.input_tmp, "")
-    common.ZipWriteStr(output_zip, "system.img", system_img.data)
-    script.AppendExtra('update_rootfs_ubi_volume() || '
-                       'abort("Failed to update rootfs ubi volume!");')
-
   script.ShowProgress(0.2, 10)
   device_specific.FullOTA_InstallEnd()
-  if not dm_verity_nand:
-    script.AppendExtra('run_program("/usr/bin/find", "/",'
-                       '"-name", "__emptyfile__", "-type", "f", "-delete");')
+  script.AppendExtra('run_program("/usr/bin/find", "/",'
+                     '"-name", "__emptyfile__", "-type", "f", "-delete");')
 
   if OPTIONS.extra_script is not None:
     script.AppendExtra(OPTIONS.extra_script)

@@ -259,29 +259,6 @@ case "$1" in
 				echo 9104 > /etc/usb/boot_hsusb_comp
 			fi
 			;;
-		*sdxnightjar* )
-			echo "Delaying usb enumeration until uC is loaded for
-			sdxnightjar" > /dev/kmsg
-			search_dir="/sys/devices/platform/4080000.qcom,mss/subsys1"
-			uC_waiting_time=0
-			while :
-			do
-				state=`cat $search_dir/state`
-				if [ "$state" = "ONLINE" ]
-				then
-					echo -n "uC loaded" > /dev/kmsg
-					break
-				fi
-				if ["$uC_waiting_time" -ge 15]
-				then
-					echo "Timeout while waiting for uC
-					loading" > /dev/kmsg
-					break
-				fi
-				sleep 1
-				uC_waiting_time=$(uC_waiting_time+1)
-			done
-		        ;;
 		*8909* | *8053* | *8017* | *qcs605* | *qcs40x* | *qcs610* )
 			echo 901D > /etc/usb/boot_hsusb_comp
 		        ;;

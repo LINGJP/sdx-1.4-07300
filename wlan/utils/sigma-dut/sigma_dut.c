@@ -837,9 +837,7 @@ static void set_defaults(struct sigma_dut *dut)
 	dut->priv_cmd = "iwpriv";
 	dut->sigma_tmpdir = SIGMA_TMPDIR;
 	dut->ap_ocvc = -1;
-	dut->user_config_ap_ocvc = -1;
 	dut->ap_sae_commit_status = -1;
-	dut->sta_async_twt_supp = -1;
 }
 
 
@@ -977,7 +975,7 @@ static void print_license(void)
 
 static void usage(void)
 {
-	printf("usage: sigma_dut [-aABdfGqDIntuVW234] [-p<port>] "
+	printf("usage: sigma_dut [-aABdfGqDIntuVW23] [-p<port>] "
 	       "[-s<sniffer>] [-m<set_maccaddr.sh>] \\\n"
 	       "       [-M<main ifname>] [-R<radio ifname>] "
 	       "[-S<station ifname>] [-P<p2p_ifname>]\\\n"
@@ -1006,9 +1004,7 @@ static void usage(void)
 	       "       [-z <client socket directory path \\\n"
 	       "       Ex: </data/vendor/wifi/sockets>] \\\n"
 	       "       [-Z <Override default tmp dir path>] \\\n"
-	       "       [-5 <WFD timeout override>] \\\n"
-	       "       [-r <HT40 or 2.4_HT40>] \\\n"
-	       "       [-6 <ocv or bp or ocv_bp>]\n");
+	       "       [-r <HT40 or 2.4_HT40>]\n");
 	printf("local command: sigma_dut [-p<port>] <-l<cmd>>\n");
 }
 
@@ -1031,7 +1027,7 @@ int main(int argc, char *argv[])
 
 	for (;;) {
 		c = getopt(argc, argv,
-			   "aAb:Bc:C:dDE:e:fF:gGhH:j:J:i:Ik:K:l:L:m:M:nN:o:O:p:P:qQr:R:s:S:tT:uv:VWw:x:y:z:Z:2345:6:");
+			   "aAb:Bc:C:dDE:e:fF:gGhH:j:J:i:Ik:K:l:L:m:M:nN:o:O:p:P:qQr:R:s:S:tT:uv:VWw:x:y:z:Z:23");
 		if (c < 0)
 			break;
 		switch (c) {
@@ -1234,37 +1230,6 @@ int main(int argc, char *argv[])
 			break;
 		case '3':
 			sigma_dut.owe_ptk_workaround = 1;
-			break;
-		case '4':
-			sigma_dut.client_privacy_default = 1;
-			break;
-		case '5': {
-			int timeout;
-
-			errno = 0;
-			timeout = strtol(optarg, NULL, 10);
-			if (errno || timeout < 0) {
-				sigma_dut_print(&sigma_dut, DUT_MSG_ERROR,
-					       "failed to set default_timeout");
-				return -1;
-			}
-			sigma_dut_print(&sigma_dut, DUT_MSG_INFO,
-					"default timeout set to %d", timeout);
-			sigma_dut.user_config_timeout = timeout;
-			break;
-		}
-		case '6':
-			if (strcmp(optarg, "ocv") == 0) {
-				sigma_dut.user_config_ap_ocvc = 1;
-			} else if (strcmp(optarg, "bp") == 0) {
-				sigma_dut.user_config_ap_beacon_prot = 1;
-			} else if (strcmp(optarg, "ocv_bp") == 0) {
-				sigma_dut.user_config_ap_beacon_prot = 1;
-				sigma_dut.user_config_ap_ocvc = 1;
-			} else {
-				printf("Unsupported -6 value\n");
-				exit(1);
-			}
 			break;
 		case 'h':
 		default:

@@ -777,15 +777,8 @@ class RamDump():
             else:
                 self.kasan_shadow_size = 1 << (va_bits - 3)
 
-            self.kimage_vaddr = self.page_end + modules_vsize + bpf_jit_vsize
-            # new since v5.11: https://lore.kernel.org/all/20201008153602.9467-3-ardb@kernel.org/
-            # The KASAN shadow region is reconfigured so that it ends at the start of
-            # the vmalloc region, and grows downwards. That way, the arrangement of
-            # the vmalloc space (which contains kernel mappings, modules, BPF region,
-            # the vmemmap array etc) is identical between non-KASAN and KASAN builds,
-            # which aids debugging.
-            if self.get_kernel_version() < (5, 11, 0):
-                self.kimage_vaddr += self.kasan_shadow_size
+            self.kimage_vaddr = self.page_end + self.kasan_shadow_size + modules_vsize + \
+                                bpf_jit_vsize
         else:
             va_bits = 39
             modules_vsize = 0x08000000
@@ -857,10 +850,7 @@ class RamDump():
             self.mmu = Armv8MMU(self)
         elif pg_dir_size == 0x4000:
             print_out_str('Using non-LPAE MMU')
-            if self.minidump:
-                self.mmu = None
-            else:
-                self.mmu = Armv7MMU(self)
+            self.mmu = Armv7MMU(self)
         elif pg_dir_size == 0x5000:
             print_out_str('Using LPAE MMU')
             text_offset = 0x8000
@@ -905,14 +895,15 @@ class RamDump():
                 '!!! Your vmlinux is probably wrong for these dumps')
             print_out_str('!!! Exiting now')
             sys.exit(1)
-        if not self.get_config():
-            print_out_str('!!! Could not get saved configuration')
-            print_out_str(
-                '!!! This is really bad and probably indicates RAM corruption')
-            print_out_str('!!! Some features may be disabled!')
+        if not self.minidump:
+            if not self.get_config():
+                print_out_str('!!! Could not get saved configuration')
+                print_out_str(
+                    '!!! This is really bad and probably indicates RAM corruption')
+                print_out_str('!!! Some features may be disabled!')
 
         self.unwind = self.Unwinder(self)
-        if self.module_table.sym_paths_exist():
+        if not self.minidump and self.module_table.sym_paths_exist():
             self.setup_module_symbols()
             self.gdbmi.setup_module_table(self.module_table)
             if self.dump_global_symbol_table:
@@ -980,12 +971,12 @@ class RamDump():
 
         zconfig = NamedTemporaryFile(mode='wb', delete=False)
         # kconfig data starts with magic 8 byte string, go past that
-        s = self.read_cstring(kconfig_addr, 8, allow_elf=True)
+        s = self.read_cstring(kconfig_addr, 8)
         if s != 'IKCFG_ST':
             return
         kconfig_addr = kconfig_addr + 8
         for i in range(0, kconfig_size):
-            val = self.read_byte(kconfig_addr + i, allow_elf=True)
+            val = self.read_byte(kconfig_addr + i)
             zconfig.write(struct.pack('<B', val))
 
         zconfig.close()
@@ -1119,42 +1110,27 @@ class RamDump():
         return False
 
     def print_socinfo(self):
-        if self.kernel_version < (5, 4, 0):
-            try:
-                if self.read_pointer('socinfo') is None:
-                  return None
-                content_socinfo = hex(self.read_pointer('socinfo'))
-                content_socinfo = content_socinfo.strip('L')
+        try:
+            if self.read_pointer('socinfo') is None:
+              return None
+            content_socinfo = hex(self.read_pointer('socinfo'))
+            content_socinfo = content_socinfo.strip('L')
 
-                sernum_offset = self.field_offset('struct socinfo_v10', 'serial_number')
+            sernum_offset = self.field_offset('struct socinfo_v10', 'serial_number')
+            if sernum_offset is None:
+                sernum_offset = self.field_offset('struct socinfo_v0_10', 'serial_number')
                 if sernum_offset is None:
-                    sernum_offset = self.field_offset('struct socinfo_v0_10', 'serial_number')
-                    if sernum_offset is None:
-                        print_out_str("No serial number information available")
-                        return False
-                addr_of_sernum = hex(int(content_socinfo, 16) + sernum_offset)
-                addr_of_sernum = addr_of_sernum.strip('L')
-                serial_number = self.read_u32(int(addr_of_sernum, 16))
-                if serial_number is not None:
-                    print_out_str('Serial number %s' % hex(serial_number))
-                    return True
-            except:
-                pass
-            return False
-        else:
-            socinfo = self.address_of('socinfo')
-            if socinfo is None:
-                return None
-            socinfo = self.read_pointer(socinfo)
-            if socinfo is None:
-                return None
-            ver = self.read_structure_field(socinfo, 'struct socinfo', 'ver')
-            chip_ver_major = (ver & 0xFFFF0000) >> 16
-            chip_ver_minor = (ver & 0x0000FFFF)
-            print_out_str("Chip Version: v{0}.{1}".format(chip_ver_major, chip_ver_minor))
-            serial_num = self.read_structure_field(socinfo, 'struct socinfo', 'serial_num')
-            print_out_str("Chip Serial Number 0x{0:x}".format(serial_num))
-            return True
+                    print_out_str("No serial number information available")
+                    return False
+            addr_of_sernum = hex(int(content_socinfo, 16) + sernum_offset)
+            addr_of_sernum = addr_of_sernum.strip('L')
+            serial_number = self.read_u32(int(addr_of_sernum, 16))
+            if serial_number is not None:
+                print_out_str('Serial number %s' % hex(serial_number))
+                return True
+        except:
+            pass
+        return False
 
     def auto_parse(self, file_path, minidump):
         for cls in sorted(AutoDumpInfo.__subclasses__(),
@@ -1443,24 +1419,12 @@ class RamDump():
             if self.kaslr_addr is None:
                 print_out_str('!!!! Kaslr addr is not provided.')
             else:
-                if self.minidump:
-                    for a in self.ebi_files:
-                        if "md_SHRDIMEM" in a[3]:
-                            self.kaslr_addr = a[1] + 0x6d0
-                            break
                 kaslr_magic = self.read_u32(self.kaslr_addr, False)
                 if kaslr_magic != 0xdead4ead:
                     print_out_str('!!!! Kaslr magic does not match.')
                 else:
                     self.kaslr_offset = self.read_u64(self.kaslr_addr + 4, False)
                     print_out_str("The kaslr_offset extracted is: " + str(hex(self.kaslr_offset)))
-
-    def get_page_size(self):
-        if self.is_config_defined('CONFIG_ARM64_PAGE_SHIFT'):
-            PAGE_SHIFT = int(self.get_config_val('CONFIG_ARM64_PAGE_SHIFT'))
-        else:
-            PAGE_SHIFT = 12
-        return 1 << PAGE_SHIFT
 
     def get_hw_id(self, add_offset=True):
         socinfo_format = -1
@@ -1677,80 +1641,20 @@ class RamDump():
         else:
             module_core_offset = self.field_offset('struct module', 'module_core')
 
-        if self.kernel_version > (4, 18, 0):
-            sect_name_offset = self.field_offset('struct module_sect_attr', 'battr') + self.field_offset('struct bin_attribute', 'attr') + self.field_offset('struct attribute', 'name')
-        else:
-            sect_name_offset = self.field_offset('struct module_sect_attr', 'name')
-
         kallsyms_offset = self.field_offset('struct module', 'kallsyms')
-        sect_addr_offset = self.field_offset('struct module_sect_attr', 'address')
-        nsections_offset = self.field_offset('struct module_sect_attrs', 'nsections')
-        section_attrs_offset = self.field_offset('struct module_sect_attrs', 'attrs')
-        section_attr_size = self.sizeof('struct module_sect_attr')
-        mod_sect_attrs_offset = self.field_offset('struct module', 'sect_attrs')
-        mod_state_offset = self.field_offset('struct module', 'state')
-        mod_attr_grp_name_offest = self.field_offset('struct module_sect_attrs', 'grp') + self.field_offset('struct attribute_group', 'name')
-        module_states = self.gdbmi.get_enum_lookup_table('module_state', 5)
 
         next_list_ent = self.read_pointer(mod_list + next_offset)
         while next_list_ent and next_list_ent != mod_list:
-            module = next_list_ent - list_offset
-
             mod_tbl_ent = module_table.module_table_entry()
-            mod_tbl_ent.name = self.read_cstring(module + name_offset)
-            state = self.read_u32(module + mod_state_offset)
-            if mod_tbl_ent.name is None or state is None or state > len(module_states) or module_states[state] not in ['MODULE_STATE_LIVE']:
-                msg = 'module state @{:x}'.format(module)
-                if mod_tbl_ent.name:
-                    msg += ' [{}]'.format(mod_tbl_ent.name)
-                msg += ' is {}'.format(state)
-                if state is not None and state < len(module_states):
-                    msg += '({})'.format(module_states[state])
-                print_out_str(msg)
-                next_list_ent = self.read_pointer(next_list_ent + next_offset)
-                continue
+            module = next_list_ent - list_offset
+            name_ptr = module + name_offset
+            mod_tbl_ent.name = self.read_cstring(name_ptr)
             mod_tbl_ent.module_offset = self.read_pointer(module + module_core_offset)
             if mod_tbl_ent.module_offset is None:
                 mod_tbl_ent.module_offset = 0
             mod_tbl_ent.kallsyms_addr = self.read_pointer(module + kallsyms_offset)
-            # Loop through sect_attrs
-            mod_tbl_ent.section_offsets = {}
-            mod_sect_attrs = self.read_pointer(module + mod_sect_attrs_offset)  # module.sect_attrs
-            if self.read_cstring(self.read_pointer(mod_sect_attrs + mod_attr_grp_name_offest))  != 'sections':
-                # Observed some ramdumps did not have proper attribute set up yet when module is being loaded.
-                # "LIVE" state check not good enough, so add one more sanity check
-                print_out_str('Unexpected variation in module section group name, skipping loading sections for {}'.format(mod_tbl_ent.name))
-                next_list_ent = self.read_pointer(next_list_ent + next_offset)
-                continue
-            for i in range(0, self.read_u32(mod_sect_attrs + nsections_offset)):
-                # attr_ptr = module.sect_attrs.attrs[i]
-                attr_ptr = mod_sect_attrs + section_attrs_offset + (i * section_attr_size)
-                # sect_name = attr_ptr.battr.attr.name (for 5.4+)
-                sect_name = self.read_cstring(self.read_pointer(attr_ptr + sect_name_offset))
-                # sect_addr = attr_ptr.address
-                sect_addr = self.read_word(attr_ptr + sect_addr_offset)
-                # https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/scripts/gdb/linux/symbols.py?h=v5.14#n102
-                if sect_name not in ['.data', '.data..read_mostly', '.rodata', '.bss',
-                                     '.text', '.text.bss', '.text.hot', '.text.unlikely']:
-                    continue
-                mod_tbl_ent.section_offsets[sect_name] = sect_addr
             self.module_table.add_entry(mod_tbl_ent)
-
             next_list_ent = self.read_pointer(next_list_ent + next_offset)
-
-    def retrieve_minidump_modules(self):
-        kmodules_seg = next((s for s in self.elffile.iter_sections() if s.name == 'KMODULES'), None)
-        if kmodules_seg is None:
-            return
-
-        kmodules_lines = self.read_cstring(kmodules_seg['sh_addr'], max_length=kmodules_seg['sh_size'])
-        for line in kmodules_lines.splitlines():
-            m = re.fullmatch(r"^name: (.+), base: (?:0x)?([0-9a-fA-F]+)\b.*", line)
-            if m is not None:
-                mod_tbl_ent = module_table.module_table_entry()
-                mod_tbl_ent.name = m.group(1)
-                mod_tbl_ent.module_offset = int(m.group(2), base=16)
-                self.module_table.add_entry(mod_tbl_ent)
 
     def parse_symbols_of_one_module(self, mod_tbl_ent, ko_file_list):
         name_index = [s for s in ko_file_list.keys() if mod_tbl_ent.name in s]
@@ -1876,10 +1780,7 @@ class RamDump():
         self.lookup_table.sort()
 
     def setup_module_symbols(self):
-        if self.minidump:
-            self.retrieve_minidump_modules()
-        else:
-            self.retrieve_modules()
+        self.retrieve_modules()
         self.parse_module_symbols();
         self.add_symbols_to_global_lookup_table()
 
@@ -1919,8 +1820,26 @@ class RamDump():
         >>> hex(dump.address_of('linux_banner'))
         '0xffffffc000c7a0a8L'
         """
+        flag = False
+        sym_name = symbol
         try:
-            return self.gdbmi.address_of(symbol)
+            addr = self.gdbmi.address_of(symbol)
+            if ((addr & 0xFF000000000000) == 0) and self.arm64:
+                for mod_tbl_ent in self.lookup_table:
+                    if "." in symbol:
+                        sym_name = symbol.split(".")[0]
+                        var = ".".join(symbol.split(".")[1:])
+                        sym_type = self.type_of(sym_name)
+                        var_offset = self.field_offset(sym_type, var)
+                        flag = True
+                    if sym_name in str(mod_tbl_ent) and sym_name == mod_tbl_ent[2]:
+                        addr = mod_tbl_ent[0]
+                if flag:
+                    return addr + var_offset
+                else:
+                    return addr
+            else:
+                return addr
         except gdbmi.GdbMIException:
             if self.hyp:
                 try:
@@ -2141,82 +2060,82 @@ class RamDump():
             a = ebi[0].read(length)
             return a
 
-    def read_dword(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
-        s = self.read_string(addr_or_name, '<Q', virtual, cpu, allow_elf)
+    def read_dword(self, addr_or_name, virtual=True, cpu=None):
+        s = self.read_string(addr_or_name, '<Q', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_word(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_word(self, addr_or_name, virtual=True, cpu=None):
         """returns a word size (pointer) read from ramdump"""
         if self.arm64:
-            s = self.read_string(addr_or_name, '<Q', virtual, cpu, allow_elf)
+            s = self.read_string(addr_or_name, '<Q', virtual, cpu)
         else:
-            s = self.read_string(addr_or_name, '<I', virtual, cpu, allow_elf)
+            s = self.read_string(addr_or_name, '<I', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_halfword(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_halfword(self, addr_or_name, virtual=True, cpu=None):
         """returns a value corresponding to half the word size"""
         if self.arm64:
-            s = self.read_string(addr_or_name, '<I', virtual, cpu, allow_elf)
+            s = self.read_string(addr_or_name, '<I', virtual, cpu)
         else:
-            s = self.read_string(addr_or_name, '<H', virtual, cpu, allow_elf)
+            s = self.read_string(addr_or_name, '<H', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_slong(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_slong(self, addr_or_name, virtual=True, cpu=None):
         """returns a value corresponding to half the word size"""
         if self.arm64:
-            s = self.read_string(addr_or_name, '<q', virtual, cpu, allow_elf)
+            s = self.read_string(addr_or_name, '<q', virtual, cpu)
         else:
-            s = self.read_string(addr_or_name, '<i', virtual, cpu, allow_elf)
+            s = self.read_string(addr_or_name, '<i', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_ulong(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_ulong(self, addr_or_name, virtual=True, cpu=None):
         """returns a value corresponding to half the word size"""
         if self.arm64:
-            s = self.read_string(addr_or_name, '<Q', virtual, cpu, allow_elf)
+            s = self.read_string(addr_or_name, '<Q', virtual, cpu)
         else:
-            s = self.read_string(addr_or_name, '<I', virtual, cpu, allow_elf)
+            s = self.read_string(addr_or_name, '<I', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_byte(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_byte(self, addr_or_name, virtual=True, cpu=None):
         """Reads a single byte."""
-        s = self.read_string(addr_or_name, '<B', virtual, cpu, allow_elf)
+        s = self.read_string(addr_or_name, '<B', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_bool(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_bool(self, addr_or_name, virtual=True, cpu=None):
         """Reads a bool."""
-        s = self.read_string(addr_or_name, '<?', virtual, cpu, allow_elf)
+        s = self.read_string(addr_or_name, '<?', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_s64(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_s64(self, addr_or_name, virtual=True, cpu=None):
         """returns a value guaranteed to be 64 bits"""
-        s = self.read_string(addr_or_name, '<q', virtual, cpu, allow_elf)
+        s = self.read_string(addr_or_name, '<q', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_u64(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_u64(self, addr_or_name, virtual=True, cpu=None):
         """returns a value guaranteed to be 64 bits"""
-        s = self.read_string(addr_or_name, '<Q', virtual, cpu, allow_elf)
+        s = self.read_string(addr_or_name, '<Q', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_s32(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_s32(self, addr_or_name, virtual=True, cpu=None):
         """returns a value guaranteed to be 32 bits"""
-        s = self.read_string(addr_or_name, '<i', virtual, cpu, allow_elf)
+        s = self.read_string(addr_or_name, '<i', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_u32(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_u32(self, addr_or_name, virtual=True, cpu=None):
         """returns a value guaranteed to be 32 bits"""
-        s = self.read_string(addr_or_name, '<I', virtual, cpu, allow_elf)
+        s = self.read_string(addr_or_name, '<I', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_int(self, addr_or_name, virtual=True,  cpu=None, allow_elf=False):
+    def read_int(self, addr_or_name, virtual=True,  cpu=None):
         """Alias for :func:`~read_u32`"""
-        return self.read_u32(addr_or_name, virtual, cpu, allow_elf)
+        return self.read_u32(addr_or_name, virtual, cpu)
 
-    def read_u16(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_u16(self, addr_or_name, virtual=True, cpu=None):
         """returns a value guaranteed to be 16 bits"""
-        s = self.read_string(addr_or_name, '<H', virtual, cpu, allow_elf)
+        s = self.read_string(addr_or_name, '<H', virtual, cpu)
         return s[0] if s is not None else None
 
-    def read_pointer(self, addr_or_name, virtual=True, cpu=None, allow_elf=False):
+    def read_pointer(self, addr_or_name, virtual=True, cpu=None):
         """Reads ``addr_or_name`` as a pointer variable.
 
         The read length is either 32-bit or 64-bit depending on the
@@ -2281,43 +2200,35 @@ class RamDump():
         return self.read_cstring(self.read_pointer(cstring_addr), max_length)
 
     def read_cstring(self, addr_or_name, max_length=100, virtual=True,
-                     cpu=None, allow_elf=False):
+                     cpu=None):
         """Reads a C string."""
         addr = addr_or_name
-        s = None
         if virtual:
             if cpu is not None:
                 pcpu_offset = self.per_cpu_offset(cpu)
                 addr_or_name = self.resolve_virt(addr_or_name)
                 addr_or_name += pcpu_offset + self.per_cpu_offset(cpu)
             addr = self.virt_to_phys(addr_or_name)
-            if allow_elf and addr is None:
-                s = self.gdbmi.read_memory(addr_or_name, '{}+{}'.format(addr_or_name, max_length))
-        if not s:
-            s = self.read_physical(addr, max_length)
+        s = self.read_physical(addr, max_length)
         if s is not None:
             a = s.decode('ascii', 'ignore')
             return a.split('\0')[0]
         else:
             return s
 
-    def read_binarystring(self, addr_or_name, length, virtual=True, cpu=None, allow_elf=False):
+    def read_binarystring(self, addr_or_name, length, virtual=True, cpu=None):
         """Reads binary data of specified length from addr_or_name."""
         addr = addr_or_name
-        s = None
         if virtual:
             if cpu is not None:
                 pcpu_offset = self.per_cpu_offset(cpu)
                 addr_or_name = self.resolve_virt(addr_or_name)
                 addr_or_name += pcpu_offset
             addr = self.virt_to_phys(addr_or_name)
-            if allow_elf and addr is None:
-                s = self.gdbmi.read_memory(addr_or_name, '{}+{}'.format(addr_or_name, length))
-        if not s:
-            s = self.read_physical(addr, length)
+        s = self.read_physical(addr, length)
         return s
 
-    def read_string(self, addr_or_name, format_string, virtual=True, cpu=None, allow_elf=False):
+    def read_string(self, addr_or_name, format_string, virtual=True, cpu=None):
         """Reads data using a format string.
 
         Reads data from addr_or_name using format_string (which should be a
@@ -2327,7 +2238,6 @@ class RamDump():
         """
         addr = addr_or_name
         per_cpu_string = ''
-        s = None
         if virtual:
             if cpu is not None:
                 pcpu_offset = self.per_cpu_offset(cpu)
@@ -2335,10 +2245,7 @@ class RamDump():
                 addr_or_name += pcpu_offset
                 per_cpu_string = ' with per-cpu offset of ' + hex(pcpu_offset)
             addr = self.virt_to_phys(addr_or_name)
-            if allow_elf and addr is None:
-                s = self.gdbmi.read_memory(addr_or_name, '{}+{}'.format(addr_or_name, struct.calcsize(format_string)))
-        if not s:
-            s = self.read_physical(addr, struct.calcsize(format_string))
+        s = self.read_physical(addr, struct.calcsize(format_string))
         if (s is None) or (s == ''):
             return None
         return struct.unpack(format_string, s)
@@ -2361,8 +2268,8 @@ class RamDump():
         ffffffc000c61108: 6c65 2032 3031 3430 3832 3720 2870 7265  le 20140827 (pre
         ffffffc000c61118: 7265 6c65 6173 6529 2028 4743 4329 2029  release) (GCC) )
         """
-        from io import StringIO
-        sio = StringIO()
+        import StringIO
+        sio = StringIO.StringIO()
         address = self.resolve_virt(addr_or_name)
         parser_util.xxd(
             address,

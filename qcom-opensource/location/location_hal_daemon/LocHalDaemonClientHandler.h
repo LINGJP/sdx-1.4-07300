@@ -1,4 +1,4 @@
-/* Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -41,7 +41,7 @@
     #include <unordered_map>
 #endif
 
-#include <ILocationAPI.h>
+#include <LocationAPI.h>
 #include <LocIpc.h>
 #include <LocationApiPbMsgConv.h>
 
@@ -61,8 +61,6 @@ public:
                 mService(service),
                 mName(clientname),
                 mClientType(clientType),
-                mServiceId(-1),
-                mInstanceId(-1),
                 mCapabilityMask(0),
                 mTracking(false),
                 mBatching(false),
@@ -85,12 +83,7 @@ public:
             mSubscriptionMask = 0;
             mLocationApi = LocationAPI::createInstance(mCallbacks);
         }
-        if (mName.compare(0, sizeof(sEAP)-1, sEAP) == 0) {
-            SockNode::getId1Id2(mName.c_str(), mName.length(),
-                                mServiceId, mInstanceId);
-            LOC_LOGi("EAP client: clientname %s, service id: %d, instance id: %d",
-                     mName.c_str(), mServiceId, mInstanceId);
-        }
+        updateSubscription(0);
     }
 
     static shared_ptr<LocIpcSender> createSender(const string socket);
@@ -101,10 +94,9 @@ public:
     // when client stops the location session, then all callbacks
     // related to location session need to be unsubscribed
     void unsubscribeLocationSessionCb();
+    uint32_t startTracking();
     uint32_t startTracking(LocationOptions & locOptions);
     void stopTracking();
-    uint32_t resumeTracking(); // resume tracking due to power resume
-    void pauseTracking();      // stop tracking due to power suspend
     void updateTrackingOptions(LocationOptions & locOptions);
     void onGnssEnergyConsumedInfoAvailable(LocAPIGnssEnergyConsumedIndMsg &msg);
     void onControlResponseCb(LocationError err, ELocMsgID msgId);
@@ -131,11 +123,10 @@ public:
     void sendTerrestrialFix(LocationError error, const Location& location);
 
     inline shared_ptr<LocIpcSender> getIpcSender () {return mIpcSender;};
-    inline int getServiceId() {return mServiceId;}  // for EAP client
-    inline int getInstanceId() {return mInstanceId;} // for EAP client
 
     void pingTest();
 
+    bool mTracking;
     bool mBatching;
     BatchingMode mBatchingMode;
     std::queue<ELocMsgID> mPendingMessages;
@@ -187,18 +178,15 @@ private:
     // name of this client
     const std::string mName;
     ClientType mClientType;
-    int mServiceId;  // For EAP client
-    int mInstanceId; // For EAP client
 
     // LocationAPI interface
     LocationCapabilitiesMask mCapabilityMask;
     uint32_t mSessionId;
     uint32_t mBatchingId;
-    ILocationAPI* mLocationApi;
+    LocationAPI* mLocationApi;
     LocationCallbacks mCallbacks;
     TrackingOptions mOptions;
     BatchingOptions mBatchOptions;
-    bool mTracking; // flag indicates whether client has started tracking session or not
 
     // bitmask to hold this client's subscription
     uint32_t mSubscriptionMask;

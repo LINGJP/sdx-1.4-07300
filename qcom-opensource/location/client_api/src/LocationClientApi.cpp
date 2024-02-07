@@ -85,11 +85,13 @@ bool LocationClientApi::startPositionSession(
     ClientCallbacks cbs = {0};
     cbs.responsecb = responseCallback;
     cbs.locationcb = locationCallback;
+    mApiImpl->updateCallbackFunctions(cbs);
 
     // callback masks
     LocationCallbacks callbacksOption = {0};
     callbacksOption.responseCb = [](::LocationError err, uint32_t id) {};
     callbacksOption.trackingCb = [](::Location n) {};
+    mApiImpl->updateCallbacks(callbacksOption);
 
     // options
     LocationOptions locationOption;
@@ -98,7 +100,7 @@ bool LocationClientApi::startPositionSession(
     locationOption.minInterval = intervalInMs;
     locationOption.minDistance = distanceInMeters;
     trackingOption.setLocationOptions(locationOption);
-    mApiImpl->startPositionSession(cbs, REPORT_CB_TYPE_NONE, callbacksOption, trackingOption);
+    mApiImpl->startTracking(trackingOption);
     return true;
 }
 
@@ -119,6 +121,7 @@ bool LocationClientApi::startPositionSession(
     ClientCallbacks cbs = {0};
     cbs.responsecb = responseCallback;
     cbs.gnssreportcbs = gnssReportCallbacks;
+    mApiImpl->updateCallbackFunctions(cbs, REPORT_CB_GNSS_INFO);
 
     // callback masks
     LocationCallbacks callbacksOption = {0};
@@ -145,6 +148,7 @@ bool LocationClientApi::startPositionSession(
             callbacksOption.gnssNHzMeasurementsCb = [](::GnssMeasurementsNotification n) {};
         }
     }
+    mApiImpl->updateCallbacks(callbacksOption);
 
     // options
     LocationOptions locationOption;
@@ -153,7 +157,7 @@ bool LocationClientApi::startPositionSession(
     locationOption.minInterval = intervalInMs;
     locationOption.minDistance = 0;
     trackingOption.setLocationOptions(locationOption);
-    mApiImpl->startPositionSession(cbs, REPORT_CB_GNSS_INFO, callbacksOption, trackingOption);
+    mApiImpl->startTracking(trackingOption);
     return true;
 }
 
@@ -174,6 +178,7 @@ bool LocationClientApi::startPositionSession(
     ClientCallbacks cbs = {0};
     cbs.responsecb = responseCallback;
     cbs.engreportcbs = engReportCallbacks;
+    mApiImpl->updateCallbackFunctions(cbs, REPORT_CB_ENGINE_INFO);
 
     // callback masks
     LocationCallbacks callbacksOption = {0};
@@ -202,6 +207,7 @@ bool LocationClientApi::startPositionSession(
             callbacksOption.gnssNHzMeasurementsCb = [](::GnssMeasurementsNotification n) {};
         }
     }
+    mApiImpl->updateCallbacks(callbacksOption);
 
     // options
     LocationOptions locationOption;
@@ -212,7 +218,7 @@ bool LocationClientApi::startPositionSession(
     locationOption.locReqEngTypeMask =(::LocReqEngineTypeMask)locEngReqMask;
     trackingOption.setLocationOptions(locationOption);
 
-    mApiImpl->startPositionSession(cbs, REPORT_CB_ENGINE_INFO, callbacksOption, trackingOption);
+    mApiImpl->startTracking(trackingOption);
     return true;
 }
 
@@ -238,6 +244,7 @@ bool LocationClientApi::startTripBatchingSession(uint32_t minInterval, uint32_t 
     ClientCallbacks cbs = {0};
     cbs.responsecb = responseCallback;
     cbs.batchingcb = batchingCallback;
+    mApiImpl->updateCallbackFunctions(cbs);
 
     // callback masks
     LocationCallbacks callbacksOption = {0};
@@ -246,6 +253,7 @@ bool LocationClientApi::startTripBatchingSession(uint32_t minInterval, uint32_t 
             BatchingOptions batchingOptions) {};
     callbacksOption.batchingStatusCb = [](BatchingStatusInfo batchingStatus,
             std::list<uint32_t>& listOfcompletedTrips) {};
+    mApiImpl->updateCallbacks(callbacksOption);
 
     LocationOptions locOption = {};
     locOption.size = sizeof(locOption);
@@ -257,8 +265,7 @@ bool LocationClientApi::startTripBatchingSession(uint32_t minInterval, uint32_t 
     batchOption.size = sizeof(batchOption);
     batchOption.batchingMode = BATCHING_MODE_TRIP;
     batchOption.setLocationOptions(locOption);
-
-    mApiImpl->startBatchingSession(cbs, REPORT_CB_TYPE_NONE, callbacksOption, batchOption);
+    mApiImpl->startBatching(batchOption);
     return true;
 }
 
@@ -278,12 +285,14 @@ bool LocationClientApi::startRoutineBatchingSession(uint32_t minInterval, uint32
     ClientCallbacks cbs = {0};
     cbs.responsecb = responseCallback;
     cbs.batchingcb = batchingCallback;
+    mApiImpl->updateCallbackFunctions(cbs);
 
     // callback masks
     LocationCallbacks callbacksOption = {0};
     callbacksOption.responseCb = [](::LocationError err, uint32_t id) {};
     callbacksOption.batchingCb = [](size_t count, ::Location* location,
             BatchingOptions batchingOptions) {};
+    mApiImpl->updateCallbacks(callbacksOption);
 
     LocationOptions locOption = {};
     locOption.size = sizeof(locOption);
@@ -295,7 +304,7 @@ bool LocationClientApi::startRoutineBatchingSession(uint32_t minInterval, uint32
     batchOption.size = sizeof(batchOption);
     batchOption.batchingMode = BATCHING_MODE_ROUTINE;
     batchOption.setLocationOptions(locOption);
-    mApiImpl->startBatchingSession(cbs, REPORT_CB_TYPE_NONE, callbacksOption, batchOption);
+    mApiImpl->startBatching(batchOption);
     return true;
 }
 
@@ -321,26 +330,43 @@ void LocationClientApi::addGeofences(std::vector<Geofence>& geofences,
     ClientCallbacks cbs = {0};
     cbs.collectivecb = responseCallback;
     cbs.gfbreachcb = gfBreachCb;
+    mApiImpl->updateCallbackFunctions(cbs);
 
     // callback masks
     LocationCallbacks callbacksOption = {0};
     callbacksOption.responseCb = [](LocationError err, uint32_t id) {};
     callbacksOption.collectiveResponseCb = [](size_t, LocationError*, uint32_t*) {};
-    callbacksOption.geofenceBreachCb =
-            [](GeofenceBreachNotification geofenceBreachNotification) {};
+    callbacksOption.geofenceBreachCb = [](GeofenceBreachNotification geofenceBreachNotification)
+            {};
+    mApiImpl->updateCallbacks(callbacksOption);
+    size_t count = geofences.size();
+    mApiImpl->mLastAddedClientIds.clear();
+    if (count > 0) {
+        GeofenceOption* gfOptions = (GeofenceOption*)malloc(sizeof(GeofenceOption) * count);
+        GeofenceInfo* gfInfos = (GeofenceInfo*)malloc(sizeof(GeofenceInfo) * count);
 
-    std::vector<Geofence> geofencesToAdd;
-    for (int i = 0; i < geofences.size(); ++i) {
-        if (!geofences[i].mGeofenceImpl) {
-            geofencesToAdd.emplace_back(geofences[i]);
+        for (int i=0; i<count; ++i) {
+            if (geofences[i].mGeofenceImpl) {
+                continue;
+            }
+            gfOptions[i].breachTypeMask = geofences[i].getBreachType();
+            gfOptions[i].responsiveness = geofences[i].getResponsiveness();
+            gfOptions[i].dwellTime = geofences[i].getDwellTime();
+            gfOptions[i].size = sizeof(gfOptions[i]);
+            gfInfos[i].latitude = geofences[i].getLatitude();
+            gfInfos[i].longitude = geofences[i].getLongitude();
+            gfInfos[i].radius = geofences[i].getRadius();
+            gfInfos[i].size = sizeof(gfInfos[i]);
+            std::shared_ptr<GeofenceImpl> gfImpl(new GeofenceImpl(&geofences[i]));
+            gfImpl->bindGeofence(&geofences[i]);
+            mApiImpl->mLastAddedClientIds.push_back(gfImpl->getClientId());
+            LOC_LOGd("Geofence LastAddedClientId: %d", gfImpl->getClientId());
+            mApiImpl->addGeofenceMap(mApiImpl->mLastAddedClientIds[i], geofences[i]);
         }
-    }
 
-    if (!geofencesToAdd.size()) {
-        LOC_LOGe ("Empty geofences");
-        return;
+        mApiImpl->addGeofences(geofences.size(), reinterpret_cast<GeofenceOption*>(gfOptions),
+                reinterpret_cast<GeofenceInfo*>(gfInfos));
     }
-    mApiImpl->addGeofences(cbs, REPORT_CB_TYPE_NONE, callbacksOption, geofencesToAdd);
 }
 void LocationClientApi::removeGeofences(std::vector<Geofence>& geofences) {
     if (!mApiImpl) {
@@ -358,6 +384,11 @@ void LocationClientApi::removeGeofences(std::vector<Geofence>& geofences) {
             }
             gfIds[i] = geofences[i].mGeofenceImpl->getClientId();
             LOC_LOGd("removeGeofences id : %d", gfIds[i]);
+        }
+        if (!mApiImpl->checkGeofenceMap(geofences.size(), gfIds)) {
+            LOC_LOGe ("Wrong geofence IDs");
+            free(gfIds);
+            return;
         }
         mApiImpl->removeGeofences(count, gfIds);
     }
@@ -385,7 +416,12 @@ void LocationClientApi::modifyGeofences(std::vector<Geofence>& geofences) {
             gfIds[i] = geofences[i].mGeofenceImpl->getClientId();
             LOC_LOGd("modifyGeofences id : %d", gfIds[i]);
         }
-
+        if (!mApiImpl->checkGeofenceMap(geofences.size(), gfIds)) {
+            LOC_LOGe ("Wrong geofence IDs");
+            free(gfIds);
+            free(gfOptions);
+            return;
+        }
         mApiImpl->modifyGeofences(geofences.size(), const_cast<uint32_t*>(gfIds),
                 reinterpret_cast<GeofenceOption*>(gfOptions));
     }
@@ -408,6 +444,11 @@ void LocationClientApi::pauseGeofences(std::vector<Geofence>& geofences) {
             gfIds[i] = geofences[i].mGeofenceImpl->getClientId();
             LOC_LOGd("pauseGeofences id : %d", gfIds[i]);
         }
+        if (!mApiImpl->checkGeofenceMap(geofences.size(), gfIds)) {
+            LOC_LOGe ("Wrong geofence IDs");
+            free(gfIds);
+            return;
+        }
         mApiImpl->pauseGeofences(count, gfIds);
     }
 }
@@ -428,6 +469,11 @@ void LocationClientApi::resumeGeofences(std::vector<Geofence>& geofences) {
             }
             gfIds[i] = geofences[i].mGeofenceImpl->getClientId();
             LOC_LOGd("resumeGeofences id : %d", gfIds[i]);
+        }
+        if (!mApiImpl->checkGeofenceMap(geofences.size(), gfIds)) {
+            LOC_LOGe ("Wrong geofence IDs");
+            free(gfIds);
+            return;
         }
         mApiImpl->resumeGeofences(count, gfIds);
     }
@@ -538,9 +584,7 @@ DECLARE_TBL(GnssSvOptionsMask) = {
     {GNSS_SV_OPTIONS_USED_IN_FIX_BIT, "USED_IN_FIX"},
     {GNSS_SV_OPTIONS_HAS_CARRIER_FREQUENCY_BIT, "CARRIER_FREQ"},
     {GNSS_SV_OPTIONS_HAS_GNSS_SIGNAL_TYPE_BIT, "SIG_TYPES"},
-    {GNSS_SV_OPTIONS_HAS_BASEBAND_CARRIER_TO_NOISE_BIT, "BASEBAND_CARRIER_TO_NOISE"},
-    {GNSS_SV_OPTIONS_HAS_ELEVATION_BIT, "ELEVATION"},
-    {GNSS_SV_OPTIONS_HAS_AZIMUTH_BIT,   "AZIMUTH"},
+    {GNSS_SV_OPTIONS_HAS_BASEBAND_CARRIER_TO_NOISE_BIT, "BASEBAND_CARRIER_TO_NOISE"}
 };
 // LocationFlagsMask
 DECLARE_TBL(LocationFlagsMask) = {
@@ -776,11 +820,9 @@ DECLARE_TBL(GnssMeasurementsDataFlagsMask) = {
     {GNSS_MEASUREMENTS_DATA_MULTIPATH_INDICATOR_BIT, "multipathIndicator"},
     {GNSS_MEASUREMENTS_DATA_SIGNAL_TO_NOISE_RATIO_BIT, "signalToNoiseRatioDb"},
     {GNSS_MEASUREMENTS_DATA_AUTOMATIC_GAIN_CONTROL_BIT, "agcLevelDb"},
-    {GNSS_MEASUREMENTS_DATA_FULL_ISB_BIT, "fullInterSignalBiasNs"},
-    {GNSS_MEASUREMENTS_DATA_FULL_ISB_UNCERTAINTY_BIT, "fullInterSignalBiasUncertaintyNs"},
-    {GNSS_MEASUREMENTS_DATA_CYCLE_SLIP_COUNT_BIT, "cycleSlipCount"},
-    {GNSS_MEASUREMENTS_DATA_GNSS_SIGNAL_TYPE_BIT, "gnssSignalType"},
-    {GNSS_MEASUREMENTS_DATA_BASEBAND_CARRIER_TO_NOISE_BIT, "basebandCarrierToNoiseDbHz"}
+    {GNSS_MEASUREMENTS_DATA_FULL_ISB_BIT, "interSignalBiasNs"},
+    {GNSS_MEASUREMENTS_DATA_FULL_ISB_UNCERTAINTY_BIT, "interSignalBiasUncertaintyNs"},
+    {GNSS_MEASUREMENTS_DATA_CYCLE_SLIP_COUNT_BIT, "cycleSlipCount"}
 };
 // GnssMeasurementsStateMask
 DECLARE_TBL(GnssMeasurementsStateMask) = {
@@ -1051,14 +1093,8 @@ string GnssLocation::toString() const {
     out += FIELDVAL_DEC(enuVelocityVRPBased[1]);
     out += FIELDVAL_DEC(enuVelocityVRPBased[2]);
     out += FIELDVAL_MASK(drSolutionStatusMask, DrSolutionStatusMask_tbl);
-    out += FIELDVAL_DEC(altitudeAssumed);
     out += FIELDVAL_MASK(sessionStatus, LocSessionStatus_tbl);
-    out += FIELDVAL_DEC(integrityRiskUsed);
-    out += FIELDVAL_DEC(protectAlongTrack);
-    out += FIELDVAL_DEC(protectCrossTrack);
-    out += FIELDVAL_DEC(protectVertical);
-    out += FIELDVAL_DEC(elapsedRealTimeNs);
-    out += FIELDVAL_DEC(elapsedRealTimeUncNs);
+
     return out;
 }
 
@@ -1121,10 +1157,9 @@ string GnssMeasurementsData::toString() const {
     out += FIELDVAL_DEC(agcLevelDb);
     out += FIELDVAL_DEC(basebandCarrierToNoiseDbHz);
     out += FIELDVAL_MASK(gnssSignalType, GnssSignalTypeMask_tbl);
-    out += FIELDVAL_DEC(fullInterSignalBiasNs);
-    out += FIELDVAL_DEC(fullInterSignalBiasUncertaintyNs);
+    out += FIELDVAL_DEC(interSignalBiasNs);
+    out += FIELDVAL_DEC(interSignalBiasUncertaintyNs);
     out += FIELDVAL_DEC(cycleSlipCount);
-    out += FIELDVAL_DEC(basebandCarrierToNoiseDbHz);
 
     return out;
 }

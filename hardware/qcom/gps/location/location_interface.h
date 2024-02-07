@@ -79,13 +79,13 @@ struct GnssInterface {
     void (*getDebugReport)(GnssDebugReport& report);
     void (*updateConnectionStatus)(bool connected, int8_t type, bool roaming,
                                    NetworkHandle networkHandle, std::string& apn);
-    void (*odcpiInit)(const odcpiRequestCallback& callback, OdcpiPrioritytype priority);
+    void (*odcpiInit)(const OdcpiRequestCallback& callback, OdcpiPrioritytype priority);
     void (*odcpiInject)(const Location& location);
     void (*blockCPI)(double latitude, double longitude, float accuracy,
                      int blockDurationMsec, double latLonDiffThreshold);
     void (*setEsStatusCallback)(std::function<void(bool)> esStatusCb);
     void (*getGnssEnergyConsumed)(GnssEnergyConsumedCallback energyConsumedCb);
-    void (*enableNfwLocationAccess)(std::vector<std::string>& enabledNfws);
+    void (*enableNfwLocationAccess)(bool enable);
     void (*nfwInit)(const NfwCbInfo& cbInfo);
     void (*getPowerStateChanges)(std::function<void(bool)> powerStateCb);
     void (*injectLocationExt)(const GnssLocationInfoNotification &locationInfo);
@@ -96,11 +96,10 @@ struct GnssInterface {
     uint32_t (*gnssUpdateSvConfig)(const GnssSvTypeConfig& constellationEnablementConfig,
                                    const GnssSvIdConfig&   blacklistSvConfig);
     uint32_t (*configLeverArm)(const LeverArmConfigInfo& configInfo);
-    bool (*measCorrInit)(const measCorrSetCapabilitiesCallback setCapabilitiesCb);
+    bool (*measCorrInit)(const measCorrSetCapabilitiesCb setCapabilitiesCb);
     bool (*measCorrSetCorrections)(const GnssMeasurementCorrections gnssMeasCorr);
     void (*measCorrClose)();
-    uint32_t (*antennaInfoInit)(const antennaInfoCallback antennaInfoCallback);
-    void (*getGnssAntennaeInfo)();
+    uint32_t (*antennaInfoInit)(const antennaInfoCb antennaInfoCallback);
     void (*antennaInfoClose) ();
     uint32_t (*configRobustLocation)(bool enable, bool enableForE911);
     uint32_t (*configMinGpsWeek)(uint16_t minGpsWeek);
@@ -115,7 +114,6 @@ struct GnssInterface {
                                      LocEngineRunState engState);
     uint32_t (*configOutputNmeaTypes)(GnssNmeaTypesMask enabledNmeaTypes);
     uint32_t (*setOptInStatus)(bool userConsent);
-    uint32_t (*configEngineIntegrityRisk)(PositioningEngineMask engineType, uint32_t integrityRisk);
 };
 
 struct BatchingInterface {
